@@ -123,7 +123,7 @@ test("shows the account-created next step after registration", async ({ page }) 
   await page.route("**/api/v1/auth/register", async (route) => {
     await fulfillJson(route, {
       data: {
-        email_verification_required: true,
+        email_verification_required: false,
         user: {
           email: "new-user@example.com",
           email_verified: false,
@@ -143,10 +143,10 @@ test("shows the account-created next step after registration", async ({ page }) 
   await page.getByRole("button", { name: "Create account", exact: true }).last().click();
 
   await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
-  await expect(page.getByRole("status")).toContainText("Verify your email");
+  await expect(page.getByRole("status")).toContainText("You can sign in now");
 });
 
-test("redirects to the projects page after a successful sign-in", async ({ page }) => {
+test("allows an unverified password account to sign in", async ({ page }) => {
   await mockUnauthenticatedApi(page);
   await mockEmailOnlyProvider(page);
   await page.route("**/api/v1/auth/login", async (route) => {
@@ -158,7 +158,7 @@ test("redirects to the projects page after a successful sign-in", async ({ page 
         },
         user: {
           email: "responder@example.com",
-          email_verified: true,
+          email_verified: false,
           id: "00000000-0000-4000-8000-000000000001",
           name: "Responder",
         },
@@ -172,39 +172,6 @@ test("redirects to the projects page after a successful sign-in", async ({ page 
   await page.getByRole("button", { name: "Sign in" }).click();
 
   await expect(page).toHaveURL(/\/projects\?post_login=1$/);
-});
-
-test("shows verification follow-up only when sign-in requires email verification", async ({ page }) => {
-  await mockUnauthenticatedApi(page);
-  await mockEmailOnlyProvider(page);
-  await page.route("**/api/v1/auth/login", async (route) => {
-    await fulfillJson(route, {
-      error: {
-        code: "email_verification_required",
-        message: "Verify your email before signing in",
-        request_id: "e2e",
-      },
-    }, 403);
-  });
-  await page.route("**/api/v1/auth/email-verification/resend", async (route) => {
-    await new Promise((resolve) => setTimeout(resolve, 250));
-    await fulfillJson(route, {
-      data: {
-        accepted: true,
-      },
-    });
-  });
-
-  await page.goto("/login");
-  await expect(page.getByRole("button", { name: "Resend verification email" })).toHaveCount(0);
-  await page.getByLabel("Email").fill("responder@example.com");
-  await page.getByLabel("Password").fill("Password123!");
-  await page.getByRole("button", { name: "Sign in" }).click();
-
-  await expect(page.getByRole("button", { name: "Resend verification email" })).toBeVisible();
-  await page.getByRole("button", { name: "Resend verification email" }).click();
-  await expect(page.getByRole("button", { name: "Sending…" })).toBeDisabled();
-  await expect(page.getByRole("status")).toContainText("If the account exists and still needs verification");
 });
 
 test("confirms the password-reset request without exposing account existence", async ({ page }) => {

@@ -128,7 +128,8 @@ describe("auth handlers", () => {
     expect(redirectUrl.searchParams.get("code_challenge")).toBeTruthy();
   });
 
-  it("blocks email/password login until the email is verified", async () => {
+  it("creates a session for an unverified email/password login", async () => {
+    const expiresAt = new Date(Date.now() + 1000 * 60 * 60);
     vi.mocked(prisma.user.findUnique).mockResolvedValue({
       email: "new-user@example.com",
       emailVerifiedAt: null,
@@ -139,6 +140,11 @@ describe("auth handlers", () => {
         passwordHash: await hashPassword("Password123!"),
       },
     } as never);
+    vi.mocked(prisma.authSession.create).mockResolvedValue({
+      expiresAt,
+      id: "22222222-2222-4222-8222-222222222222",
+    } as never);
+
     const response = await invokeHandler(loginHandler, {
       body: {
         email: "new-user@example.com",
@@ -146,14 +152,16 @@ describe("auth handlers", () => {
       },
     });
 
-    expect(response.status).toBe(403);
+    expect(response.status).toBe(200);
+    expect(response.cookies).toHaveProperty("pagerwho_session");
     expect(response.body).toMatchObject({
-      error: {
-        code: "email_verification_required",
+      data: {
+        user: {
+          email_verified: false,
+        },
       },
     });
-    expect(response.cookies).not.toHaveProperty("pagerwho_session");
-    expect(prisma.authSession.create).not.toHaveBeenCalled();
+    expect(prisma.authSession.create).toHaveBeenCalledOnce();
   });
 
   it("creates a session for a verified email/password login", async () => {

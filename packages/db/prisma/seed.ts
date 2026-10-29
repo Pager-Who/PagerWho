@@ -101,28 +101,6 @@ async function main() {
     },
   });
 
-  const localPlatformAdminUser = await prisma.user.upsert({
-    where: { email: "zc149@naver.com" },
-    update: {
-      emailVerifiedAt: new Date(),
-    },
-    create: {
-      email: "zc149@naver.com",
-      emailVerifiedAt: new Date(),
-      name: "zc149",
-    },
-  });
-  await prisma.userPasswordCredential.upsert({
-    where: {
-      userId: localPlatformAdminUser.id,
-    },
-    update: {},
-    create: {
-      passwordHash: seedPasswordHash,
-      userId: localPlatformAdminUser.id,
-    },
-  });
-
   await prisma.platformAdminRole.upsert({
     where: {
       userId_role: {
@@ -135,20 +113,6 @@ async function main() {
       assignedByUserId: primaryUser.id,
       role: "platform_admin",
       userId: primaryUser.id,
-    },
-  });
-  await prisma.platformAdminRole.upsert({
-    where: {
-      userId_role: {
-        role: "platform_admin",
-        userId: localPlatformAdminUser.id,
-      },
-    },
-    update: {},
-    create: {
-      assignedByUserId: primaryUser.id,
-      role: "platform_admin",
-      userId: localPlatformAdminUser.id,
     },
   });
 
@@ -988,9 +952,7 @@ async function main() {
     login_password: seedUserPassword,
     login_users: ["testuser1@example.com", "testuser2@example.com"],
   });
-  logger.info("Dev webhook token generated", {
-    dev_webhook_token: devWebhookSecret,
-  });
+  logger.info("Development webhook endpoint seeded");
 }
 
 main()
@@ -1120,7 +1082,8 @@ async function seedNotificationRouting(
 }
 
 async function hashWebhookSecret(secret: string) {
-  const input = `dev-webhook-pepper:${secret}`;
+  const pepper = process.env.WEBHOOK_SECRET_PEPPER ?? "dev-webhook-pepper";
+  const input = `${pepper}:${secret}`;
 
   if (globalThis.crypto?.subtle) {
     const digest = await globalThis.crypto.subtle.digest("SHA-256", new TextEncoder().encode(input));

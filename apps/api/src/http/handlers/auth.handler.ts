@@ -128,7 +128,7 @@ export const registerHandler: RequestHandler = async (req, res, next) => {
 
     res.status(201).json({
       data: {
-        email_verification_required: true,
+        email_verification_required: false,
         user: mapAuthenticatedUser(user),
       },
     });
@@ -183,18 +183,6 @@ export const loginHandler: RequestHandler = async (req, res, next) => {
         resourceId: user.id,
       });
       throw new HttpError(403, "user_suspended", "User account is suspended");
-    }
-
-    if (!user.emailVerifiedAt) {
-      await recordAuthActivity(prisma, {
-        action: "auth.login_failed",
-        message: "User login failed",
-        metadata: {
-          reason: "email_verification_required",
-        },
-        resourceId: user.id,
-      });
-      throw new HttpError(403, "email_verification_required", "Verify your email before signing in");
     }
 
     const session = await createAuthSession(user.id, req);

@@ -47,7 +47,7 @@ export function validateDeploymentEnv(env, mode) {
 export function deploymentWarnings(env) {
   const mail = ["SMTP_HOST", "SMTP_USER", "SMTP_PASSWORD"].every(name => env[name]?.trim());
   const oidc = ["OIDC_ISSUER_URL", "OIDC_CLIENT_ID", "OIDC_CLIENT_SECRET", "OIDC_REDIRECT_URI", "AUTH_STATE_SECRET"].every(name => env[name]?.trim());
-  return mail || oidc ? [] : ["New password accounts require email verification. Configure authentication SMTP or OIDC before onboarding new users; existing verified accounts can still sign in."];
+  return mail || oidc ? [] : ["Authentication email and OIDC are not configured. Password users can sign in, but email verification and password-reset messages will not be delivered."];
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

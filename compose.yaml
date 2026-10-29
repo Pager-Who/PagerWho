@@ -1,0 +1,111 @@
+name: pagerwho
+
+x-app-image: &app-image
+  image: pagerwho-app:local
+  build:
+    context: .
+    dockerfile: deploy/prod/Dockerfile
+    target: runtime
+
+x-app-environment: &app-environment
+  NODE_ENV: development
+  DATABASE_URL: postgresql://pagerwho:pagerwho@postgres:5432/pagerwho
+  WEB_APP_URL: http://localhost:8080
+  WEB_APP_BASE_URL: http://localhost:8080
+  WEBHOOK_PUBLIC_BASE_URL: http://localhost:8080
+  WEBHOOK_SECRET_PEPPER: local-poc-webhook-pepper-7a4cb81020a84f55805ff52b
+  PROVIDER_CREDENTIAL_ENCRYPTION_KEY: local-poc-provider-key-2c1ffaf5baf74effa1e4b36f
+  NOTIFICATION_DELIVERY_MODE: log
+
+x-app-service: &app-service
+  <<: *app-image
+  environment: *app-environment
+  init: true
+  restart: unless-stopped
+  security_opt:
+    - no-new-privileges:true
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: pagerwho
+      POSTGRES_PASSWORD: pagerwho
+      POSTGRES_USER: pagerwho
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pagerwho -d pagerwho"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  migrate:
+    <<: *app-service
+    command: pnpm --filter @im/db migrate:deploy
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  seed:
+    <<: *app-service
+    command: pnpm --filter @im/db seed
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: "no"
+
+  api:
+    <<: *app-service
+    command: pnpm --filter @im/api start
+    depends_on:
+      seed:
+        condition: service_completed_successfully
+    environment:
+      <<: *app-environment
+      APP_VERSION: local-poc
+      HOST: 0.0.0.0
+      PORT: 3000
+    expose:
+      - "3000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+      start_period: 20s
+
+  worker:
+    <<: *app-service
+    command: pnpm --filter @im/worker start
+    depends_on:
+      seed:
+        condition: service_completed_successfully
+
+  web:
+    image: pagerwho-web:local
+    build:
+      context: .
+      dockerfile: deploy/prod/Dockerfile
+      target: web
+      args:
+        VITE_API_BASE_URL: /api/v1
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8080:80"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+      start_period: 10s
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  postgres-data:

@@ -122,7 +122,7 @@ export function AuthPage() {
         setPasswordConfirmation("");
         setMode("login");
         setShowVerificationFollowUp(true);
-        setNotice("Account created. We sent a verification email. Verify your email before signing in.");
+        setNotice("Account created. You can sign in now. Email verification is optional.");
         return;
       }
 
@@ -163,9 +163,6 @@ export function AuthPage() {
       login(session.user.id);
       navigate(returnTo, { replace: true });
     } catch (submitError) {
-      if (mode === "login" && submitError instanceof ApiClientError && submitError.code === "email_verification_required") {
-        setShowVerificationFollowUp(true);
-      }
       setError(submitError);
     } finally {
       setIsSubmitting(false);
@@ -613,10 +610,6 @@ function formatAuthSubmitError(error: unknown, isVerifyingEmail = false, isResen
 
   if (isVerifyingEmail) {
     return "We could not verify this email address. Request a new verification email and try again.";
-  }
-
-  if (error instanceof ApiClientError && error.code === "email_verification_required") {
-    return "Verify your email before signing in. You can resend the verification email below.";
   }
 
   if (error instanceof TypeError && /fetch|network/i.test(error.message)) {

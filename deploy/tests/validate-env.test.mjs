@@ -14,5 +14,5 @@ test("rejects invalid quotas and retention", () => { assert(validateDeploymentEn
 
 test("rejects shared secrets across different purposes", () => assert(validateDeploymentEnv({ ...base(), PHONE_VERIFICATION_SECRET: "a".repeat(64) }, "prod").some(e => e.includes("independent values"))));
 
-test("warns when no new-user authentication path is configured", () => assert(deploymentWarnings(base()).some(w => w.includes("email verification"))));
+test("warns when optional authentication integrations are not configured", () => assert(deploymentWarnings(base()).some(w => w.includes("Password users can sign in"))));
 test("configured SMTP suppresses the onboarding warning", () => assert.deepEqual(deploymentWarnings({ ...base(), SMTP_HOST: "smtp.test", SMTP_USER: "audit", SMTP_PASSWORD: "synthetic" }), []));

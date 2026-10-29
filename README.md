@@ -1,11 +1,60 @@
 # PagerWho
 
-PagerWho is a self-hosted incident response application with service ownership,
-on-call schedules, escalation policies, webhook ingestion, notifications,
-and workflows.
+Open-source incident response and on-call management for teams.
+
+PagerWho turns monitoring alerts into deduplicated incidents, notifies the
+on-call responder, and escalates automatically when nobody responds.
+
+[Try PagerWho Cloud](https://pagerwho.com/) ·
+[Read the documentation](https://pagerwho.com/docs) ·
+[Self-host PagerWho](#self-host-pagerwho)
+
+## Self-host PagerWho
+
+The quickest way to evaluate PagerWho locally includes PostgreSQL, database
+migrations, demo data, the API, worker, and web application in one Compose stack.
+
+```sh
+docker compose up --build -d --wait
+```
+
+Open [http://localhost:8080](http://localhost:8080) and sign in with:
+
+```text
+Email: testuser1@example.com
+Password: Password123!
+```
+
+Notifications use log delivery in this local POC, so no external provider is
+contacted. Data is stored in the `postgres-data` Docker volume. Stop the stack
+with `docker compose down`. Add `-v` only when you intentionally want to delete
+the POC database.
+
+The root Compose stack is for local evaluation and binds the web application to
+127.0.0.1. For an internet-facing installation, use the production deployment
+configuration, generate independent secrets, configure HTTPS, and connect the
+notification and authentication providers you need.
+
+## Features
+
+- Webhook alert ingestion, deduplication, and incident timelines.
+- Service ownership and incident acknowledgement and resolution.
+- Primary and secondary on-call rotations, previews, and temporary overrides.
+- Escalation policies with delays and repeat rules.
+- Slack, SMTP email, SMS, and phone notification providers.
+- Event-driven workflow automation.
+- Project roles, audit logs, and operational diagnostics.
+
+## PagerWho Cloud
+
+Want to evaluate PagerWho without operating infrastructure? Use the hosted
+service at [pagerwho.com](https://pagerwho.com/). Product guides for alert intake,
+incidents, on-call schedules, escalation policies, notifications, workflows,
+roles, and troubleshooting are available in the
+[PagerWho documentation](https://pagerwho.com/docs).
 
 - [Architecture](docs/architecture.md)
-- API documentation: /api-docs and /openapi.json on the API server.
+- Self-hosted API documentation: `/api-docs` and `/openapi.json`.
 
 ## Requirements
 
@@ -69,10 +118,9 @@ SMTP, OIDC, and phone verification examples are commented out. Uncomment and
 configure only the features you use:
 
 - Authentication email requires SMTP_HOST, SMTP_USER, and SMTP_PASSWORD. Without
-  them, verification and password-reset messages are not sent, and newly registered
-  password accounts cannot sign in until verified. Existing verified accounts
-  can still sign in. This is separate
-  from project SMTP for incident notifications.
+  them, verification and password-reset messages are not sent. Email verification
+  is optional, so password accounts can still sign in. This is separate from
+  project SMTP for incident notifications.
 - OIDC requires issuer, client ID, client secret, redirect URI, and
   AUTH_STATE_SECRET. The redirect URI must match the identity provider's
   registration. Provider ID and label are optional display/routing choices.
@@ -124,15 +172,15 @@ using encrypted provider credentials.
 Authentication email uses the deployment SMTP settings, independently of project
 incident-notification SMTP. Without authentication SMTP, verification and
 password-reset messages cannot be delivered. Google OIDC is optional and is
-configured by the deployment operator. New email/password accounts require email
-verification before sign-in; SMTP is necessary for that onboarding flow.
+configured by the deployment operator. New email/password accounts can sign in
+without verification; SMTP is needed only for verification and password resets.
 
 
-## Docker Compose deployment
+## Production Docker Compose deployment
 
 Use Linux, Bash, Docker Engine, and a current Docker Compose v2 supporting
-up --wait and --wait-timeout. The stacks run the application services, not a
-PostgreSQL server. Provision PostgreSQL separately and ensure that containers
+up --wait and --wait-timeout. Unlike the root local POC stack, the production
+stack runs the application services without a PostgreSQL server. Provision PostgreSQL separately and ensure that containers
 can reach it. host.docker.internal is mapped to the Docker host, but PostgreSQL
 must listen on a reachable interface and allow the container network. A database
 host of localhost inside a container does not refer to the host machine.
@@ -166,9 +214,9 @@ and WEBHOOK_PUBLIC_BASE_URL default to WEB_APP_URL in Compose; override only
 when externally visible links require another origin. Additional trusted browser
 origins can be supplied through CORS_ORIGIN.
 
-Configure authentication SMTP or OIDC before onboarding new users. Without
-either, only already-verified password accounts can sign in; the preflight prints
-a warning. Phone verification settings remain optional. The
+Authentication SMTP and OIDC are optional. Without either, password accounts can
+still register and sign in, but verification and password-reset emails are not
+delivered; the preflight prints a warning. Phone verification settings remain optional. The
 production notification mode defaults to live: configure project providers and
 personal destinations before expecting actual alerts. Dev defaults to log,
 which records simulated delivery. Auth SMTP and project notification SMTP are

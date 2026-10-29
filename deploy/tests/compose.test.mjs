@@ -17,6 +17,28 @@ function render(mode, values = {}) {
     return JSON.parse(result.stdout);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 }
+
+function renderQuickstart() {
+  const result = spawnSync("docker", ["compose", "-f", resolve("compose.yaml"), "config", "--format", "json"], {
+    encoding: "utf8",
+  });
+  assert.equal(result.status, 0, "Quickstart Compose must render");
+  return JSON.parse(result.stdout);
+}
+
+test("quickstart includes a private PostgreSQL database and seeded application stack", () => {
+  const { services } = renderQuickstart();
+  assert.equal(services.postgres.image, "postgres:16");
+  assert.equal(services.postgres.ports, undefined);
+  assert.equal(services.migrate.depends_on.postgres.condition, "service_healthy");
+  assert.equal(services.seed.depends_on.migrate.condition, "service_completed_successfully");
+  assert.equal(services.api.depends_on.seed.condition, "service_completed_successfully");
+  assert.equal(services.worker.depends_on.seed.condition, "service_completed_successfully");
+  assert.equal(services.api.environment.DATABASE_URL, services.worker.environment.DATABASE_URL);
+  assert.equal(services.api.environment.NOTIFICATION_DELIVERY_MODE, "log");
+  assert.equal(services.web.ports[0].host_ip, "127.0.0.1");
+  assert.equal(services.web.ports[0].published, "8080");
+});
 for (const mode of ["dev", "prod"]) {
   test(mode + " maps the selected environment consistently", () => {
     const { services } = render(mode);
