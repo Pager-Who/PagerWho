@@ -1,0 +1,10 @@
+{
+  "name": "@im/config",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./eslint/base": "./eslint/base.mjs",
+    "./tsconfig/base": "./tsconfig/base.json"
+  }
+}
+

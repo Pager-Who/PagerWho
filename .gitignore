@@ -1,0 +1,26 @@
+node_modules/
+.pnpm-store/
+.corepack/
+.corepack-bin/
+.turbo/
+.impeccable/
+dist/
+coverage/
+playwright-report/
+test-results/
+
+.env
+.env.*
+!.env.example
+!**/.env.example
+
+.DS_Store
+*.log
+
+TODO.local.md
+
+# Local AI development tools
+.agents/
+.claude/
+.codex/
+CLAUDE.md

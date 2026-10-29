@@ -1,0 +1,916 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum IncidentSeverity {
+  critical
+  high
+  medium
+  low
+}
+
+enum IncidentPriority {
+  P1
+  P2
+  P3
+  P4
+  P5
+}
+
+enum IncidentStatus {
+  triggered
+  acknowledged
+  resolved
+}
+
+enum EscalationStateStatus {
+  active
+  paused
+  stopped
+  completed
+}
+
+enum NotificationStatus {
+  pending
+  sending
+  sent
+  sent_after_ack
+  failed
+  retrying
+  skipped
+}
+
+enum NotificationDeliveryAttemptStatus {
+  sending
+  sent
+  failed
+  skipped
+  timed_out
+}
+
+enum NotificationChannel {
+  slack
+  email
+  sms
+  phone
+  webhook
+}
+
+enum NotificationContactType {
+  slack_webhook
+  email_webhook
+  phone_number
+  phone_sms
+  phone_voice
+}
+
+enum EscalationTargetType {
+  primary_on_call
+  secondary_on_call
+  team
+  user
+  team_channel
+  webhook
+}
+
+enum OnCallRotationType {
+  daily
+  weekly
+  custom
+}
+
+enum OnCallLayer {
+  primary
+  secondary
+}
+
+enum WorkspaceRole {
+  owner
+  admin
+  responder
+  viewer
+}
+
+enum WorkspaceInviteStatus {
+  pending
+  accepted
+  declined
+  revoked
+  expired
+}
+
+enum WorkerRunStatus {
+  running
+  succeeded
+  failed
+}
+
+enum PlatformRole {
+  platform_admin
+}
+
+model User {
+  id                      String                       @id @default(uuid()) @db.Uuid
+  email                   String                       @unique
+  emailVerifiedAt         DateTime?                    @map("email_verified_at")
+  name                    String
+  identities              UserIdentity[]
+  passwordCredential      UserPasswordCredential?
+  emailVerificationTokens EmailVerificationToken[]
+  passwordResetTokens     PasswordResetToken[]
+  authSessions            AuthSession[]
+  platformAdminRoles      PlatformAdminRole[]          @relation("PlatformAdminRoleUser")
+  assignedPlatformAdminRoles PlatformAdminRole[]       @relation("PlatformAdminRoleAssignedBy")
+  suspendedByUserId       String?                      @map("suspended_by_user_id") @db.Uuid
+  suspendedByUser         User?                        @relation("UserSuspendedBy", fields: [suspendedByUserId], references: [id], onDelete: SetNull)
+  suspendedUsers          User[]                       @relation("UserSuspendedBy")
+  suspendedWorkspaces     Workspace[]                  @relation("WorkspaceSuspendedBy")
+  suspendedAt             DateTime?                    @map("suspended_at")
+  suspensionReason        String?                      @map("suspension_reason")
+  createdWorkspaces       Workspace[]                  @relation("WorkspaceCreatedBy")
+  workspaceMemberships    WorkspaceMember[]
+  assignedWorkspaceMemberRoles WorkspaceMemberRole[]   @relation("WorkspaceMemberRoleAssignedBy")
+  sentWorkspaceInvites    WorkspaceInvite[]            @relation("WorkspaceInviteInvitedBy")
+  receivedWorkspaceInvites WorkspaceInvite[]           @relation("WorkspaceInviteInvitedUser")
+  updatedWorkspaceQuotaSettingss WorkspaceQuotaSettings[]  @relation("WorkspaceQuotaSettingsUpdatedBy")
+  notificationContacts    UserNotificationContact[]
+  notificationPreferences UserNotificationPreference[]
+  teamMemberships         TeamMember[]
+  acknowledgedIncidents   Incident[]                   @relation("IncidentAcknowledgedBy")
+  resolvedIncidents       Incident[]                   @relation("IncidentResolvedBy")
+  rotationParticipants    OnCallRotationParticipant[]
+  overrides               OnCallOverride[]
+  timelineEntries         IncidentTimelineEntry[]
+  activityLogs            ActivityLog[]
+  workflowEvents          WorkflowEvent[]             @relation("WorkflowEventActor")
+  workflowsCreated        Workflow[]                  @relation("WorkflowCreatedByUser")
+  workflowsRunAs          Workflow[]                  @relation("WorkflowRunAsUser")
+  createdAt               DateTime                     @default(now()) @map("created_at")
+  updatedAt               DateTime                     @updatedAt @map("updated_at")
+
+  @@index([suspendedAt])
+  @@map("users")
+}
+
+model PlatformAdminRole {
+  userId           String       @map("user_id") @db.Uuid
+  role             PlatformRole
+  assignedByUserId String?      @map("assigned_by_user_id") @db.Uuid
+  user             User         @relation("PlatformAdminRoleUser", fields: [userId], references: [id], onDelete: Cascade)
+  assignedByUser   User?        @relation("PlatformAdminRoleAssignedBy", fields: [assignedByUserId], references: [id], onDelete: SetNull)
+  createdAt        DateTime     @default(now()) @map("created_at")
+
+  @@id([userId, role])
+  @@index([role])
+  @@index([assignedByUserId])
+  @@map("platform_admin_roles")
+}
+
+model UserPasswordCredential {
+  userId       String   @id @map("user_id") @db.Uuid
+  passwordHash String   @map("password_hash")
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@map("user_password_credentials")
+}
+
+model EmailVerificationToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  sentToEmail String  @map("sent_to_email")
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  @@index([userId, expiresAt])
+  @@index([expiresAt, usedAt])
+  @@map("email_verification_tokens")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  @@index([userId, expiresAt])
+  @@index([expiresAt, usedAt])
+  @@map("password_reset_tokens")
+}
+
+model UserIdentity {
+  id            String   @id @default(uuid()) @db.Uuid
+  userId        String   @map("user_id") @db.Uuid
+  provider      String
+  issuer        String
+  subject       String
+  email         String
+  emailVerified Boolean  @default(false) @map("email_verified")
+  name          String?
+  rawProfile    Json?    @map("raw_profile")
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@unique([provider, issuer, subject])
+  @@index([userId])
+  @@map("user_identities")
+}
+
+model AuthSession {
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String    @map("user_id") @db.Uuid
+  tokenHash  String    @unique @map("token_hash")
+  expiresAt  DateTime  @map("expires_at")
+  revokedAt  DateTime? @map("revoked_at")
+  userAgent  String?   @map("user_agent")
+  ipAddress  String?   @map("ip_address")
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+
+  @@index([userId, expiresAt])
+  @@index([expiresAt, revokedAt])
+  @@map("auth_sessions")
+}
+
+model Workspace {
+  id              String             @id @default(uuid()) @db.Uuid
+  name            String
+  slug            String             @unique
+  createdByUserId String?            @map("created_by_user_id") @db.Uuid
+  createdByUser   User?              @relation("WorkspaceCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  suspendedByUserId String?          @map("suspended_by_user_id") @db.Uuid
+  suspendedByUser   User?            @relation("WorkspaceSuspendedBy", fields: [suspendedByUserId], references: [id], onDelete: SetNull)
+  suspendedAt     DateTime?          @map("suspended_at")
+  suspensionReason String?           @map("suspension_reason")
+  members         WorkspaceMember[]
+  invites         WorkspaceInvite[]
+  notificationProviderSettings WorkspaceNotificationProviderSetting[]
+  webhookIntegrations WorkspaceWebhookIntegration[]
+  teams           Team[]
+  services        Service[]
+  escalationPolicies EscalationPolicy[]
+  schedules       OnCallSchedule[]
+  incidents       Incident[]
+  activityLogs    ActivityLog[]
+  workflows        Workflow[]
+  workflowEvents   WorkflowEvent[]
+  workflowRuns     WorkflowRun[]
+  quotaSettings   WorkspaceQuotaSettings?
+  createdAt       DateTime           @default(now()) @map("created_at")
+  updatedAt       DateTime           @updatedAt @map("updated_at")
+
+  @@index([suspendedAt])
+  @@map("workspaces")
+}
+
+model WorkspaceQuotaSettings {
+  workspaceId     String    @id @map("workspace_id") @db.Uuid
+  updatedByUserId String?   @map("updated_by_user_id") @db.Uuid
+  quotaOverrides  Json?     @map("quota_overrides")
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  updatedByUser   User?     @relation("WorkspaceQuotaSettingsUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  @@map("workspace_entitlements")
+}
+
+model WorkspaceNotificationProviderSetting {
+  workspaceId String    @map("workspace_id") @db.Uuid
+  provider    String
+  enabled     Boolean   @default(false)
+  config      Json      @default("{}")
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  @@id([workspaceId, provider])
+  @@index([provider, enabled])
+  @@map("workspace_notification_provider_settings")
+}
+
+model WorkspaceWebhookIntegration {
+  workspaceId String    @map("workspace_id") @db.Uuid
+  type        String
+  enabled     Boolean   @default(true)
+  config      Json      @default("{}")
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  @@id([workspaceId, type])
+  @@index([type, enabled])
+  @@map("workspace_webhook_integrations")
+}
+
+model WorkspaceMember {
+  workspaceId String        @map("workspace_id") @db.Uuid
+  userId      String        @map("user_id") @db.Uuid
+  role        WorkspaceRole
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  roles       WorkspaceMemberRole[]
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+
+  @@id([workspaceId, userId])
+  @@index([userId, role])
+  @@map("workspace_members")
+}
+
+model WorkspaceMemberRole {
+  workspaceId      String          @map("workspace_id") @db.Uuid
+  userId           String          @map("user_id") @db.Uuid
+  roleKey          String          @map("role_key")
+  assignedByUserId String?         @map("assigned_by_user_id") @db.Uuid
+  member           WorkspaceMember @relation(fields: [workspaceId, userId], references: [workspaceId, userId], onDelete: Cascade)
+  assignedByUser   User?           @relation("WorkspaceMemberRoleAssignedBy", fields: [assignedByUserId], references: [id], onDelete: SetNull)
+  createdAt        DateTime        @default(now()) @map("created_at")
+
+  @@id([workspaceId, userId, roleKey])
+  @@index([workspaceId, roleKey])
+  @@index([userId, roleKey])
+  @@map("workspace_member_roles")
+}
+
+model WorkspaceInvite {
+  id              String                @id @default(uuid()) @db.Uuid
+  workspaceId     String                @map("workspace_id") @db.Uuid
+  invitedEmail    String                @map("invited_email")
+  invitedUserId   String?               @map("invited_user_id") @db.Uuid
+  invitedByUserId String                @map("invited_by_user_id") @db.Uuid
+  role            WorkspaceRole
+  status          WorkspaceInviteStatus @default(pending)
+  acceptedAt      DateTime?             @map("accepted_at")
+  declinedAt      DateTime?             @map("declined_at")
+  revokedAt       DateTime?             @map("revoked_at")
+  expiresAt       DateTime              @map("expires_at")
+  workspace       Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  invitedUser     User?                 @relation("WorkspaceInviteInvitedUser", fields: [invitedUserId], references: [id], onDelete: SetNull)
+  invitedByUser   User                  @relation("WorkspaceInviteInvitedBy", fields: [invitedByUserId], references: [id], onDelete: Cascade)
+  roles           WorkspaceInviteRole[]
+  createdAt       DateTime              @default(now()) @map("created_at")
+  updatedAt       DateTime              @updatedAt @map("updated_at")
+
+  @@index([workspaceId, status, createdAt])
+  @@index([invitedUserId, status, createdAt])
+  @@index([invitedEmail, status, createdAt])
+  @@map("workspace_invites")
+}
+
+model WorkspaceInviteRole {
+  inviteId  String          @map("invite_id") @db.Uuid
+  roleKey   String          @map("role_key")
+  invite    WorkspaceInvite @relation(fields: [inviteId], references: [id], onDelete: Cascade)
+  createdAt DateTime        @default(now()) @map("created_at")
+
+  @@id([inviteId, roleKey])
+  @@index([roleKey])
+  @@map("workspace_invite_roles")
+}
+
+model UserNotificationContact {
+  id                     String                  @id @default(uuid()) @db.Uuid
+  userId                 String                  @map("user_id") @db.Uuid
+  type                   NotificationContactType
+  address                String
+  verifiedAt             DateTime?               @map("verified_at")
+  verificationProvider   String?                 @map("verification_provider")
+  verificationExternalId String?                 @map("verification_external_id")
+  verificationSentAt     DateTime?               @map("verification_sent_at")
+  user                   User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt              DateTime                @default(now()) @map("created_at")
+  updatedAt              DateTime                @updatedAt @map("updated_at")
+
+  @@unique([userId, type])
+  @@map("user_notification_contacts")
+}
+
+model UserNotificationPreference {
+  userId       String              @map("user_id") @db.Uuid
+  channel      NotificationChannel
+  enabled      Boolean             @default(false)
+  delaySeconds Int                 @default(0) @map("delay_seconds")
+  user         User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt    DateTime            @default(now()) @map("created_at")
+  updatedAt    DateTime            @updatedAt @map("updated_at")
+
+  @@id([userId, channel])
+  @@map("user_notification_preferences")
+}
+
+model Team {
+  id        String           @id @default(uuid()) @db.Uuid
+  workspaceId String         @map("workspace_id") @db.Uuid
+  name      String
+  workspace Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  members   TeamMember[]
+  services  Service[]
+  schedules OnCallSchedule[]
+  createdAt DateTime         @default(now()) @map("created_at")
+  updatedAt DateTime         @updatedAt @map("updated_at")
+
+  @@unique([workspaceId, name])
+  @@index([workspaceId])
+  @@map("teams")
+}
+
+model TeamMember {
+  teamId    String   @map("team_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  role      String   @default("member")
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@id([teamId, userId])
+  @@map("team_members")
+}
+
+model Service {
+  id                 String             @id @default(uuid()) @db.Uuid
+  workspaceId        String             @map("workspace_id") @db.Uuid
+  name               String
+  description        String?
+  teamId             String?            @map("team_id") @db.Uuid
+  escalationPolicyId String?            @map("escalation_policy_id") @db.Uuid
+  webhookIntegrationConfig Json         @default("{}") @map("webhook_integration_config")
+  workspace          Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  team               Team?              @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  escalationPolicy   EscalationPolicy?  @relation(fields: [escalationPolicyId], references: [id])
+  webhookEndpoints   WebhookEndpoint[]
+  incidents          Incident[]
+  schedules          OnCallSchedule[]
+  createdAt          DateTime           @default(now()) @map("created_at")
+  updatedAt          DateTime           @updatedAt @map("updated_at")
+
+  @@index([workspaceId])
+  @@index([workspaceId, name, id])
+  @@index([name, id])
+  @@map("services")
+}
+
+model WebhookEndpoint {
+  id          String          @id @default(uuid()) @db.Uuid
+  serviceId   String          @map("service_id") @db.Uuid
+  name        String
+  secretHash  String          @map("secret_hash")
+  service     Service         @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  events      IncidentEvent[]
+  createdAt   DateTime        @default(now()) @map("created_at")
+  disabledAt  DateTime?       @map("disabled_at")
+
+  @@map("webhook_endpoints")
+}
+
+model Incident {
+  id                String                   @id @default(uuid()) @db.Uuid
+  workspaceId       String                   @map("workspace_id") @db.Uuid
+  serviceId         String                   @map("service_id") @db.Uuid
+  title             String
+  description       String?
+  severity          IncidentSeverity
+  priority          IncidentPriority         @default(P3)
+  status            IncidentStatus           @default(triggered)
+  source            String
+  fingerprint       String
+  dedupKey          String?                  @map("dedup_key")
+  acknowledgedById  String?                  @map("acknowledged_by") @db.Uuid
+  acknowledgedAt    DateTime?                @map("acknowledged_at")
+  resolvedById      String?                  @map("resolved_by") @db.Uuid
+  resolvedAt        DateTime?                @map("resolved_at")
+  workspace         Workspace                @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  service           Service                  @relation(fields: [serviceId], references: [id])
+  acknowledgedBy    User?                    @relation("IncidentAcknowledgedBy", fields: [acknowledgedById], references: [id])
+  resolvedBy        User?                    @relation("IncidentResolvedBy", fields: [resolvedById], references: [id])
+  events            IncidentEvent[]
+  timelineEntries   IncidentTimelineEntry[]
+  escalationState   IncidentEscalationState?
+  notifications     NotificationLog[]
+  createdAt         DateTime                 @default(now()) @map("created_at")
+  updatedAt         DateTime                 @updatedAt @map("updated_at")
+
+  @@index([createdAt, id])
+  @@index([workspaceId, createdAt, id])
+  @@index([workspaceId, status, createdAt])
+  @@index([workspaceId, status, createdAt, id])
+  @@index([workspaceId, priority, createdAt, id])
+  @@index([serviceId, createdAt, id])
+  @@index([serviceId, status, createdAt, id])
+  @@index([serviceId, priority, createdAt, id])
+  @@index([serviceId, status, fingerprint])
+  @@map("incidents")
+}
+
+model IncidentEvent {
+  id                String           @id @default(uuid()) @db.Uuid
+  serviceId         String           @map("service_id") @db.Uuid
+  incidentId        String?          @map("incident_id") @db.Uuid
+  webhookEndpointId String?          @map("webhook_endpoint_id") @db.Uuid
+  eventKey          String           @map("event_key")
+  rawPayload        Json             @map("raw_payload")
+  normalizedPayload Json             @map("normalized_payload")
+  incident          Incident?        @relation(fields: [incidentId], references: [id])
+  webhookEndpoint   WebhookEndpoint? @relation(fields: [webhookEndpointId], references: [id])
+  createdAt         DateTime         @default(now()) @map("created_at")
+
+  @@unique([serviceId, eventKey])
+  @@index([incidentId])
+  @@map("incident_events")
+}
+
+model IncidentTimelineEntry {
+  id          String    @id @default(uuid()) @db.Uuid
+  incidentId  String    @map("incident_id") @db.Uuid
+  type        String
+  message     String
+  metadata    Json?
+  actorUserId String?   @map("actor_user_id") @db.Uuid
+  incident    Incident  @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  actorUser   User?     @relation(fields: [actorUserId], references: [id])
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  @@index([incidentId, createdAt])
+  @@index([incidentId, createdAt, id])
+  @@map("incident_timeline_entries")
+}
+
+model OnCallSchedule {
+  id        String           @id @default(uuid()) @db.Uuid
+  workspaceId String         @map("workspace_id") @db.Uuid
+  name      String
+  teamId    String?          @map("team_id") @db.Uuid
+  serviceId String?          @map("service_id") @db.Uuid
+  timezone  String
+  workspace Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  team      Team?            @relation(fields: [teamId], references: [id])
+  service   Service?         @relation(fields: [serviceId], references: [id])
+  rotations OnCallRotation[]
+  overrides OnCallOverride[]
+  createdAt DateTime         @default(now()) @map("created_at")
+  updatedAt DateTime         @updatedAt @map("updated_at")
+
+  @@index([workspaceId])
+  @@index([teamId])
+  @@index([serviceId])
+  @@map("on_call_schedules")
+}
+
+model OnCallRotation {
+  id               String                      @id @default(uuid()) @db.Uuid
+  scheduleId       String                      @map("schedule_id") @db.Uuid
+  layer            OnCallLayer
+  rotationType     OnCallRotationType          @map("rotation_type")
+  rotationInterval Int                         @map("rotation_interval")
+  startsAt         DateTime                    @map("starts_at")
+  timezone         String
+  schedule         OnCallSchedule              @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  participants     OnCallRotationParticipant[]
+  createdAt        DateTime                    @default(now()) @map("created_at")
+  updatedAt        DateTime                    @updatedAt @map("updated_at")
+
+  @@map("on_call_rotations")
+}
+
+model OnCallRotationParticipant {
+  rotationId String         @map("rotation_id") @db.Uuid
+  userId     String         @map("user_id") @db.Uuid
+  position   Int
+  rotation   OnCallRotation @relation(fields: [rotationId], references: [id], onDelete: Cascade)
+  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([rotationId, userId])
+  @@unique([rotationId, position])
+  @@map("on_call_rotation_participants")
+}
+
+model OnCallOverride {
+  id         String         @id @default(uuid()) @db.Uuid
+  scheduleId String         @map("schedule_id") @db.Uuid
+  userId     String         @map("user_id") @db.Uuid
+  layer      OnCallLayer
+  startsAt   DateTime       @map("starts_at")
+  endsAt     DateTime       @map("ends_at")
+  schedule   OnCallSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt  DateTime       @default(now()) @map("created_at")
+
+  @@index([scheduleId, startsAt, endsAt])
+  @@map("on_call_overrides")
+}
+
+model EscalationPolicy {
+  id                    String                 @id @default(uuid()) @db.Uuid
+  workspaceId           String                 @map("workspace_id") @db.Uuid
+  name                  String
+  repeatEnabled         Boolean                @default(false) @map("repeat_enabled")
+  repeatIntervalSeconds Int?                   @map("repeat_interval_seconds")
+  repeatLimit           Int?                   @map("repeat_limit")
+  workspace             Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  services              Service[]
+  steps                 EscalationPolicyStep[]
+  incidentStates        IncidentEscalationState[]
+  createdAt             DateTime               @default(now()) @map("created_at")
+  updatedAt             DateTime               @updatedAt @map("updated_at")
+
+  @@index([workspaceId])
+  @@map("escalation_policies")
+}
+
+model EscalationPolicyStep {
+  id                 String                 @id @default(uuid()) @db.Uuid
+  policyId           String                 @map("policy_id") @db.Uuid
+  stepOrder          Int                    @map("step_order")
+  delaySeconds       Int                    @map("delay_seconds")
+  targetType         EscalationTargetType   @map("target_type")
+  targetId           String?                @map("target_id")
+  policy             EscalationPolicy       @relation(fields: [policyId], references: [id], onDelete: Cascade)
+  notificationLogs   NotificationLog[]
+
+  @@unique([policyId, stepOrder])
+  @@map("escalation_policy_steps")
+}
+
+model IncidentEscalationState {
+  incidentId       String                 @id @map("incident_id") @db.Uuid
+  policyId         String                 @map("policy_id") @db.Uuid
+  policySnapshot   Json                   @map("policy_snapshot")
+  currentStep      Int                    @map("current_step")
+  repeatIteration  Int                    @default(0) @map("repeat_iteration")
+  nextRunAt        DateTime?              @map("next_run_at")
+  status           EscalationStateStatus  @default(active)
+  incident         Incident               @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  policy           EscalationPolicy       @relation(fields: [policyId], references: [id])
+  createdAt        DateTime               @default(now()) @map("created_at")
+  updatedAt        DateTime               @updatedAt @map("updated_at")
+
+  @@index([status, nextRunAt])
+  @@index([status, nextRunAt, incidentId])
+  @@map("incident_escalation_states")
+}
+
+model NotificationLog {
+  id                String                  @id @default(uuid()) @db.Uuid
+  incidentId        String                  @map("incident_id") @db.Uuid
+  policyStepId      String?                 @map("policy_step_id") @db.Uuid
+  repeatIteration   Int?                    @map("repeat_iteration")
+  channel           NotificationChannel
+  targetType        EscalationTargetType    @map("target_type")
+  targetId          String?                 @map("target_id")
+  targetAddress     String                  @map("target_address")
+  status            NotificationStatus      @default(pending)
+  attempt           Int                     @default(0)
+  idempotencyKey    String                  @unique @map("idempotency_key")
+  eventAction       String                  @default("incident.created") @map("event_action")
+  providerMessageId String?                 @map("provider_message_id")
+  errorMessage      String?                 @map("error_message")
+  nextRetryAt       DateTime?               @map("next_retry_at")
+  sentAt            DateTime?               @map("sent_at")
+  incident          Incident                @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  policyStep        EscalationPolicyStep?   @relation(fields: [policyStepId], references: [id])
+  deliveryAttempts  NotificationDeliveryAttempt[]
+  createdAt         DateTime                @default(now()) @map("created_at")
+  updatedAt         DateTime                @updatedAt @map("updated_at")
+
+  @@index([status, nextRetryAt])
+  @@index([status, createdAt, id])
+  @@index([incidentId])
+  @@index([incidentId, createdAt, id])
+  @@map("notification_logs")
+}
+
+model NotificationDeliveryAttempt {
+  id                String                            @id @default(uuid()) @db.Uuid
+  notificationLogId String                            @map("notification_log_id") @db.Uuid
+  attempt           Int
+  status            NotificationDeliveryAttemptStatus
+  provider          String
+  providerMessageId String?                           @map("provider_message_id")
+  errorMessage      String?                           @map("error_message")
+  retryAfterSeconds Int?                              @map("retry_after_seconds")
+  startedAt         DateTime                          @default(now()) @map("started_at")
+  completedAt       DateTime?                         @map("completed_at")
+  metadata          Json?
+  notificationLog   NotificationLog                   @relation(fields: [notificationLogId], references: [id], onDelete: Cascade)
+
+  @@unique([notificationLogId, attempt])
+  @@index([notificationLogId, startedAt])
+  @@index([status, startedAt])
+  @@map("notification_delivery_attempts")
+}
+
+model ActivityLog {
+  id           String   @id @default(uuid()) @db.Uuid
+  workspaceId  String?  @map("workspace_id") @db.Uuid
+  resourceType String   @map("resource_type")
+  resourceId   String?  @map("resource_id") @db.Uuid
+  action       String
+  message      String
+  actorUserId  String?  @map("actor_user_id") @db.Uuid
+  metadata     Json?
+  workspace    Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  actorUser    User?    @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+  workflowEvents WorkflowEvent[]
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([workspaceId, createdAt])
+  @@index([resourceType, resourceId, createdAt])
+  @@index([action, createdAt])
+  @@map("activity_logs")
+}
+
+model Workflow {
+  id              String           @id @default(uuid()) @db.Uuid
+  workspaceId     String           @map("workspace_id") @db.Uuid
+  name            String
+  description     String?
+  enabled         Boolean          @default(false)
+  graphMetadata   Json?            @map("graph_metadata")
+  runAsUserId     String           @map("run_as_user_id") @db.Uuid
+  createdByUserId String?          @map("created_by_user_id") @db.Uuid
+  workspace       Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  runAsUser       User             @relation("WorkflowRunAsUser", fields: [runAsUserId], references: [id], onDelete: Restrict)
+  createdByUser   User?            @relation("WorkflowCreatedByUser", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  triggers        WorkflowTrigger[]
+  actions         WorkflowAction[]
+  runs            WorkflowRun[]
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+
+  @@index([workspaceId, enabled])
+  @@index([runAsUserId])
+  @@map("workflows")
+}
+
+model WorkflowTrigger {
+  id           String     @id @default(uuid()) @db.Uuid
+  workflowId   String     @map("workflow_id") @db.Uuid
+  triggerKey   String     @default(uuid()) @map("trigger_key")
+  eventAction  String     @map("event_action")
+  resourceType String?    @map("resource_type")
+  filters      Json?
+  entryActionKey String?   @map("entry_action_key")
+  workflow     Workflow   @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  runs         WorkflowRun[]
+  createdAt    DateTime   @default(now()) @map("created_at")
+
+  @@index([eventAction])
+  @@index([workflowId])
+  @@unique([workflowId, triggerKey])
+  @@map("workflow_triggers")
+}
+
+model WorkflowAction {
+  id          String              @id @default(uuid()) @db.Uuid
+  workflowId  String              @map("workflow_id") @db.Uuid
+  actionOrder Int                 @map("action_order")
+  actionKey   String              @default(uuid()) @map("action_key")
+  type        String
+  config      Json
+  nextActionKey String?           @map("next_action_key")
+  failureActionKey String?        @map("failure_action_key")
+  workflow    Workflow            @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  actionRuns  WorkflowActionRun[]
+  createdAt   DateTime            @default(now()) @map("created_at")
+  updatedAt   DateTime            @updatedAt @map("updated_at")
+
+  @@unique([workflowId, actionOrder])
+  @@unique([workflowId, actionKey])
+  @@index([workflowId])
+  @@map("workflow_actions")
+}
+
+model WorkflowEvent {
+  id            String        @id @default(uuid()) @db.Uuid
+  activityLogId String?       @unique @map("activity_log_id") @db.Uuid
+  workspaceId   String        @map("workspace_id") @db.Uuid
+  action        String
+  resourceType  String        @map("resource_type")
+  resourceId    String?       @map("resource_id") @db.Uuid
+  actorUserId   String?       @map("actor_user_id") @db.Uuid
+  metadata      Json?
+  origin        String        @default("activity")
+  occurredAt    DateTime      @map("occurred_at")
+  processedAt   DateTime?     @map("processed_at")
+  lockedAt      DateTime?     @map("locked_at")
+  lockedBy      String?       @map("locked_by")
+  workspace     Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  activityLog   ActivityLog?  @relation(fields: [activityLogId], references: [id], onDelete: SetNull)
+  actorUser     User?         @relation("WorkflowEventActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+  runs          WorkflowRun[]
+  createdAt     DateTime      @default(now()) @map("created_at")
+
+  @@index([workspaceId, processedAt, occurredAt, id])
+  @@index([action, occurredAt])
+  @@index([origin, processedAt])
+  @@map("workflow_events")
+}
+
+model WorkflowRun {
+  id              String              @id @default(uuid()) @db.Uuid
+  workflowId      String              @map("workflow_id") @db.Uuid
+  workflowEventId String              @map("workflow_event_id") @db.Uuid
+  workspaceId     String              @map("workspace_id") @db.Uuid
+  matchedTriggerId String?            @map("matched_trigger_id") @db.Uuid
+  entryActionKey  String?             @map("entry_action_key")
+  status          String              @default("pending")
+  attempt         Int                 @default(0)
+  errorMessage    String?             @map("error_message")
+  startedAt       DateTime?           @map("started_at")
+  completedAt     DateTime?           @map("completed_at")
+  nextRetryAt     DateTime?           @map("next_retry_at")
+  workflow        Workflow            @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  workflowEvent   WorkflowEvent       @relation(fields: [workflowEventId], references: [id], onDelete: Cascade)
+  workspace       Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  matchedTrigger  WorkflowTrigger?    @relation(fields: [matchedTriggerId], references: [id], onDelete: SetNull)
+  actionRuns      WorkflowActionRun[]
+  createdAt       DateTime            @default(now()) @map("created_at")
+  updatedAt       DateTime            @updatedAt @map("updated_at")
+
+  @@unique([workflowId, workflowEventId, matchedTriggerId])
+  @@index([status, nextRetryAt, createdAt])
+  @@index([workspaceId, createdAt])
+  @@index([matchedTriggerId])
+  @@map("workflow_runs")
+}
+
+model WorkflowActionRun {
+  id               String          @id @default(uuid()) @db.Uuid
+  workflowRunId    String          @map("workflow_run_id") @db.Uuid
+  workflowActionId String          @map("workflow_action_id") @db.Uuid
+  actionOrder      Int             @map("action_order")
+  type             String
+  status           String          @default("pending")
+  attempt          Int             @default(0)
+  errorMessage     String?         @map("error_message")
+  output           Json?
+  startedAt        DateTime?       @map("started_at")
+  completedAt      DateTime?       @map("completed_at")
+  nextRetryAt      DateTime?       @map("next_retry_at")
+  workflowRun      WorkflowRun     @relation(fields: [workflowRunId], references: [id], onDelete: Cascade)
+  workflowAction   WorkflowAction  @relation(fields: [workflowActionId], references: [id], onDelete: Cascade)
+  createdAt        DateTime        @default(now()) @map("created_at")
+  updatedAt        DateTime        @updatedAt @map("updated_at")
+
+  @@index([workflowRunId, actionOrder])
+  @@index([status, nextRetryAt])
+  @@map("workflow_action_runs")
+}
+
+model WorkerRunLog {
+  id             String          @id @default(uuid()) @db.Uuid
+  workerName     String          @map("worker_name")
+  status         WorkerRunStatus @default(running)
+  startedAt      DateTime        @default(now()) @map("started_at")
+  completedAt    DateTime?       @map("completed_at")
+  durationMs     Int?            @map("duration_ms")
+  processedCount Int             @default(0) @map("processed_count")
+  errorMessage   String?         @map("error_message")
+  metadata       Json?
+
+  @@index([workerName, startedAt])
+  @@index([status, startedAt])
+  @@map("worker_run_logs")
+}
+
+model AnalyticsEvent {
+  id             String   @id @default(uuid()) @db.Uuid
+  eventId        String   @unique @map("event_id") @db.Uuid
+  eventName      String   @map("event_name")
+  schemaVersion  Int      @default(1) @map("schema_version")
+  occurredAt     DateTime @map("occurred_at")
+  sessionId      String   @map("session_id")
+  anonymousId    String?  @map("anonymous_id")
+  routeName      String   @map("route_name")
+  locale         String?
+  deviceClass    String?  @map("device_class")
+  campaignSource String?  @map("campaign_source")
+  campaignMedium String?  @map("campaign_medium")
+  campaignName   String?  @map("campaign_name")
+  campaignContent String? @map("campaign_content")
+  durationMs     Int?     @map("duration_ms")
+  status         String?
+  properties     Json
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@index([eventName, occurredAt])
+  @@index([routeName, occurredAt])
+  @@index([createdAt])
+  @@map("analytics_events")
+}

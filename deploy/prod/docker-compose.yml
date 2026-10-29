@@ -1,0 +1,92 @@
+name: pagerwho-prod
+
+x-app-image: &app_image
+  image: pagerwho-prod-app:${PAGERWHO_IMAGE_TAG:-latest}
+  build:
+    context: ../..
+    dockerfile: deploy/prod/Dockerfile
+    target: runtime
+
+x-app-runtime: &app_runtime
+  <<: *app_image
+  env_file:
+    - ${PAGERWHO_ENV_FILE:-../../.env}
+  environment: &app_environment
+    NODE_ENV: production
+    DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in the deployment environment file}
+    WEB_APP_URL: ${WEB_APP_URL:?Set WEB_APP_URL in the deployment environment file}
+    WEB_APP_BASE_URL: ${WEB_APP_BASE_URL:-${WEB_APP_URL}}
+    WEBHOOK_PUBLIC_BASE_URL: ${WEBHOOK_PUBLIC_BASE_URL:-${WEB_APP_URL}}
+    WEBHOOK_SECRET_PEPPER: ${WEBHOOK_SECRET_PEPPER:?Set WEBHOOK_SECRET_PEPPER}
+    PROVIDER_CREDENTIAL_ENCRYPTION_KEY: ${PROVIDER_CREDENTIAL_ENCRYPTION_KEY:?Set PROVIDER_CREDENTIAL_ENCRYPTION_KEY}
+    NOTIFICATION_DELIVERY_MODE: ${NOTIFICATION_DELIVERY_MODE:-live}
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+  init: true
+  security_opt:
+    - no-new-privileges:true
+  logging: &app_logging
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "5"
+
+services:
+  migrate:
+    <<: *app_runtime
+    command: pnpm --filter @im/db migrate:deploy
+    restart: "no"
+
+  api:
+    <<: *app_runtime
+    environment:
+      <<: *app_environment
+      APP_VERSION: ${PAGERWHO_IMAGE_TAG:-development}
+      HOST: 0.0.0.0
+      PORT: 3000
+    command: pnpm --filter @im/api start
+    expose: ["3000"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+      start_period: 20s
+    stop_grace_period: 30s
+    restart: unless-stopped
+
+  worker:
+    <<: *app_runtime
+    command: pnpm --filter @im/worker start
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    stop_grace_period: 30s
+    restart: unless-stopped
+
+  web:
+    logging: *app_logging
+    image: pagerwho-prod-web:${PAGERWHO_IMAGE_TAG:-latest}
+    build:
+      context: ../..
+      dockerfile: deploy/prod/Dockerfile
+      target: web
+      args:
+        VITE_API_BASE_URL: /api/v1
+    ports:
+      - "${PAGERWHO_HTTP_BIND:-127.0.0.1}:${PAGERWHO_HTTP_PORT:-8080}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+      start_period: 10s
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped

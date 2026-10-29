@@ -1,0 +1,43 @@
+{
+  "name": "incident-management",
+  "private": true,
+  "packageManager": "pnpm@9.15.4",
+  "scripts": {
+    "dev": "turbo run dev",
+    "dev:ports": "lsof -nP -iTCP:3000 -iTCP:5173 -sTCP:LISTEN || true",
+    "dev:web": "pnpm --filter @im/web dev",
+    "dev:api": "pnpm --filter @im/api dev",
+    "dev:worker": "pnpm --filter @im/worker dev",
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "test:e2e": "playwright test",
+    "test:backend": "pnpm --filter @im/api --filter @im/worker --filter @im/backend-core test",
+    "test:backend:integration": "pnpm --filter @im/backend-core test:integration",
+    "lint": "eslint . --max-warnings 0",
+    "test:deploy": "node --test deploy/tests/*.test.mjs",
+    "typecheck": "turbo run typecheck && tsc -p tsconfig.tools.json --noEmit",
+    "db:up": "docker compose -f infra/docker-compose.yml up -d postgres",
+    "db:down": "docker compose -f infra/docker-compose.yml down",
+    "db:ps": "docker compose -f infra/docker-compose.yml ps",
+    "db:psql": "docker compose -f infra/docker-compose.yml exec postgres psql -U postgres -d incident_management",
+    "db:tables": "docker compose -f infra/docker-compose.yml exec postgres psql -U postgres -d incident_management -c \"\\dt\"",
+    "db:migrations": "docker compose -f infra/docker-compose.yml exec postgres psql -U postgres -d incident_management -c \"select migration_name, finished_at from _prisma_migrations order by finished_at;\"",
+    "db:counts": "docker compose -f infra/docker-compose.yml exec postgres psql -U postgres -d incident_management -c \"select 'users' as table_name, count(*) from users union all select 'teams', count(*) from teams union all select 'services', count(*) from services union all select 'incidents', count(*) from incidents union all select 'notification_logs', count(*) from notification_logs;\"",
+    "db:seed": "pnpm --filter @im/db seed",
+    "db:generate": "pnpm --filter @im/db generate",
+    "db:validate": "pnpm --filter @im/db validate",
+    "db:doctor": "pnpm --filter @im/db run doctor",
+    "db:migrate": "pnpm --filter @im/db migrate",
+    "db:studio": "pnpm --filter @im/db studio"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.18.0",
+    "@types/node": "^22.10.2",
+    "@playwright/test": "^1.60.0",
+    "eslint": "^9.18.0",
+    "tsx": "^4.19.2",
+    "turbo": "^2.3.3",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.19.1"
+  }
+}
