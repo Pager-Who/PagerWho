@@ -1,9 +1,13 @@
-import type { CreateIncidentRequest, IncidentFilter, IncidentPriority, ManualEscalationRequest } from "@im/contracts";
+import type { CopilotLocale, CreateIncidentRequest, IncidentFilter, IncidentPriority, ManualEscalationRequest } from "@im/contracts";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { incidentApi, serviceApi, workspaceApi } from "../../shared/api/client";
 import { queryKeys } from "../../shared/api/queryKeys";
 import { useAuth } from "../../shared/auth";
+
+export function useIncidentSummaryMutation(incidentId: string, locale: CopilotLocale) {
+  return useMutation({ mutationFn: () => incidentApi.summarizeIncident(incidentId, { locale }), retry: false });
+}
 
 export function useIncidentList(filters: Partial<IncidentFilter>) {
   const { projectId } = useAuth();

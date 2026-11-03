@@ -2,6 +2,8 @@ import type {
   CreateIncidentRequest,
   Incident,
   IncidentDetail,
+  IncidentSummary,
+  IncidentSummaryRequest,
   IncidentEscalationState,
   IncidentFilter,
   IncidentNotificationsQuery,
@@ -31,6 +33,11 @@ export function createIncidentApi(client: ApiClient) {
     },
     getIncidentDetail(incidentId: string) {
       return client.request<IncidentDetail>(`/incidents/${incidentId}/detail`);
+    },
+    summarizeIncident(incidentId: string, input: IncidentSummaryRequest) {
+      return client.request<IncidentSummary>(`/incidents/${incidentId}/ai-summary`, {
+        method: "POST", body: JSON.stringify(input),
+      });
     },
     acknowledgeIncident(incidentId: string) {
       return client.request<Incident>(`/incidents/${incidentId}/ack`, {

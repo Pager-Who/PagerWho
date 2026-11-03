@@ -3,6 +3,7 @@ import type { Express } from "express";
 import { activityLogsRoutes } from "./activity-logs.routes";
 import { auditLogsRoutes } from "./audit-logs.routes";
 import { authRoutes } from "./auth.routes";
+import { copilotRoutes } from "./copilot.routes";
 import { escalationRoutes } from "./escalation.routes";
 import { incidentsRoutes } from "./incidents.routes";
 import { meRoutes } from "./me.routes";
@@ -19,6 +20,7 @@ import { workspacesRoutes } from "./workspaces.routes";
 
 export function registerRoutes(app: Express) {
   app.use("/api/v1/auth", authRoutes);
+  app.use("/api/v1/copilot", copilotRoutes);
   app.use("/api/v1/activity-logs", activityLogsRoutes);
   app.use("/api/v1/audit-logs", auditLogsRoutes);
   app.use("/api/v1/me", meRoutes);

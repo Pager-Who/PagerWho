@@ -10,6 +10,10 @@ export const queryKeys = {
     me: () => ["auth", "me"] as const,
     providers: () => ["auth", "providers"] as const,
   },
+  copilot: {
+    all: ["copilot"] as const,
+    status: () => ["copilot", "status"] as const,
+  },
   incidents: {
     all: ["incidents"] as const,
     list: (filters: Partial<IncidentFilter> = {}) => ["incidents", "list", filters] as const,

@@ -48,6 +48,8 @@ const requiredTables = [
   "workflow_runs",
   "workflow_action_runs",
   "worker_run_logs",
+  "copilot_usage_counters",
+  "copilot_proposals",
 ] as const;
 
 const legacyTables = [
