@@ -32,6 +32,11 @@ export const copilotKoStatic: Record<string, string> = {
   "Existing service": "기존 서비스",
   "New service name": "새 서비스 이름",
   "Schedule name": "스케줄 이름",
+  "Checking Copilot setup...": "Copilot 설정 확인 중...",
+  "Copilot setup required": "Copilot 설정 필요",
+  "Copilot is not configured on this server yet. A server administrator can enable it by connecting an OpenAI-compatible model provider.": "이 서버에는 아직 Copilot이 설정되지 않았습니다. 서버 관리자가 OpenAI 호환 모델 제공자를 연결하면 사용할 수 있습니다.",
+  "Set these API environment variables, then restart the API:": "API 서버에 다음 환경 변수를 설정한 뒤 API를 재시작하세요:",
+  "See": "자세한 내용:",
 };
 
 export const copilotZhCNStatic: Record<string, string> = {
@@ -67,6 +72,11 @@ export const copilotZhCNStatic: Record<string, string> = {
   "Existing service": "现有服务",
   "New service name": "新服务名称",
   "Schedule name": "排班名称",
+  "Checking Copilot setup...": "正在检查 Copilot 设置...",
+  "Copilot setup required": "需要设置 Copilot",
+  "Copilot is not configured on this server yet. A server administrator can enable it by connecting an OpenAI-compatible model provider.": "此服务器尚未配置 Copilot。服务器管理员连接兼容 OpenAI 的模型提供方后即可使用。",
+  "Set these API environment variables, then restart the API:": "请为 API 设置以下环境变量，然后重启 API：",
+  "See": "详见",
 };
 
 export const copilotTranslation = {

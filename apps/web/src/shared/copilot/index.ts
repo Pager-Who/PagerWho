@@ -1,1 +1,2 @@
-export * from "./useCopilotAvailable";
+export * from "./CopilotSetupNotice";
+export * from "./useCopilotAvailability";

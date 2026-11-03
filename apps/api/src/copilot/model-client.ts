@@ -10,8 +10,6 @@ import { assertCopilotTokenBudget, recordCopilotTokens } from "./copilot-usage";
  * adapter translates to and from /chat/completions at this boundary only.
  */
 
-const LEGACY_QWEN_BASE_URL = "https://ap-southeast-1.maas.qwencloudapi.com/compatible-mode/v1";
-const LEGACY_QWEN_MODEL = "qwen3.7-flash";
 const MAX_OUTPUT_TOKENS = 4096;
 // Keys the adapters own. COPILOT_EXTRA_BODY must not override them.
 const RESERVED_BODY_KEYS = new Set([
@@ -35,12 +33,11 @@ function env(name: string) {
   return process.env[name]?.trim() || undefined;
 }
 
-/** Reads COPILOT_* settings; legacy QWEN_* / COPILOT_QWEN_* variables keep existing Qwen Cloud installs working. */
+/** Reads the COPILOT_* model provider settings. */
 export function readCopilotConfig(): CopilotConfigState {
-  const legacyQwen = !env("COPILOT_API_KEY") && Boolean(env("QWEN_API_KEY"));
-  const apiKey = env("COPILOT_API_KEY") ?? env("QWEN_API_KEY");
-  const baseUrl = env("COPILOT_BASE_URL") ?? env("COPILOT_QWEN_BASE_URL") ?? (legacyQwen ? LEGACY_QWEN_BASE_URL : undefined);
-  const model = env("COPILOT_MODEL") ?? env("COPILOT_QWEN_MODEL") ?? (legacyQwen ? LEGACY_QWEN_MODEL : undefined);
+  const apiKey = env("COPILOT_API_KEY");
+  const baseUrl = env("COPILOT_BASE_URL");
+  const model = env("COPILOT_MODEL");
   const rawFormat = env("COPILOT_API_FORMAT") ?? "responses";
   const rawExtraBody = env("COPILOT_EXTRA_BODY");
 
@@ -62,7 +59,7 @@ export function readCopilotConfig(): CopilotConfigState {
     }
   }
 
-  let extraBody: Record<string, unknown> = legacyQwen && !rawExtraBody ? { enable_thinking: false } : {};
+  let extraBody: Record<string, unknown> = {};
   if (rawExtraBody) {
     try {
       const parsed: unknown = JSON.parse(rawExtraBody);

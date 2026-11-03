@@ -84,7 +84,7 @@ export async function fulfillUnhandledApi(route: Route) {
   );
 }
 
-/** Copilot UI is hidden unless the server reports a configured model provider. Register after broader API routes. */
+/** Copilot shows a setup notice unless the server reports a configured model provider. Register after broader API routes. */
 export async function mockCopilotAvailable(page: Page, available = true) {
   await page.route("**/api/v1/copilot/status", (route) => fulfillJson(route, { data: {
     available, api_format: available ? "responses" : null, checked_at: "2026-01-01T00:00:00.000Z", model: available ? "example-model" : null,

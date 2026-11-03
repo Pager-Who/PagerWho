@@ -35,7 +35,7 @@ import {
 } from "../../../shared/components";
 import { LocalizedText } from "../../../shared/i18n";
 import { hasWorkspacePermission, useAuth } from "../../../shared/auth";
-import { useCopilotAvailable } from "../../../shared/copilot";
+import { useCopilotAvailability } from "../../../shared/copilot";
 import { formatDateTime, formatRelativeTime, shortId } from "../../../shared/utils";
 import { IncidentSummaryPanel } from "../components/IncidentSummaryPanel";
 import {
@@ -57,7 +57,7 @@ const incidentPriorities = ["P1", "P2", "P3", "P4", "P5"] as const satisfies rea
 export function IncidentDetailPage() {
   const { incidentId } = useParams();
   const { isPlatformAdmin } = useAuth();
-  const isCopilotAvailable = useCopilotAvailable();
+  const copilotAvailability = useCopilotAvailability();
   const [activeTab, setActiveTab] = useState<IncidentDetailTab>("overview");
   const [manualEscalationReason, setManualEscalationReason] = useState("");
   const [isPriorityEditorOpen, setIsPriorityEditorOpen] = useState(false);
@@ -283,7 +283,7 @@ export function IncidentDetailPage() {
             </div>
           </Panel>
 
-          {isCopilotAvailable ? <IncidentSummaryPanel incident={incident} /> : null}
+          <IncidentSummaryPanel availability={copilotAvailability} incident={incident} />
 
           <Panel className="grid gap-4.5">
             <div

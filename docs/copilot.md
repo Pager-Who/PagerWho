@@ -6,7 +6,8 @@ notification delivery records, prepares settings changes for human approval,
 and generates advisory incident summaries.
 
 Copilot is **disabled by default**. When no model provider is configured, the
-web app hides the Copilot button, panel and AI incident summary, and the API
+Copilot button and the AI incident summary stay visible, but opening them shows
+a "Copilot setup required" notice instead of sending requests, and the API
 rejects Copilot requests with `503 copilot_not_configured`. Everything else in
 PagerWho works without it.
 

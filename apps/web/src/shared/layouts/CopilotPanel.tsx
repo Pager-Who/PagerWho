@@ -10,6 +10,7 @@ import { copilotApi } from "../api/client";
 import { queryKeys } from "../api/queryKeys";
 import { useAuth } from "../auth";
 import { Button, CopilotMark, Field, Select, TextArea, TextInput } from "../components";
+import { CopilotSetupNotice, type CopilotAvailability } from "../copilot";
 import { normalizeLocale } from "../i18n";
 import { cn } from "../utils";
 
@@ -28,12 +29,14 @@ type CopilotMessage = {
 };
 
 type CopilotPanelProps = {
+  availability: CopilotAvailability;
   isOpen: boolean;
   onClose: () => void;
   projectName?: string | undefined;
 };
 
-export function CopilotPanel({ isOpen, onClose, projectName }: CopilotPanelProps) {
+export function CopilotPanel({ availability, isOpen, onClose, projectName }: CopilotPanelProps) {
+  const isReady = availability === "available";
   const { i18n, t } = useTranslation();
   const { projectId } = useAuth();
   const queryClient = useQueryClient();
@@ -119,7 +122,7 @@ export function CopilotPanel({ isOpen, onClose, projectName }: CopilotPanelProps
 
   async function submitQuestion(rawQuestion: string, structuredInput?: CopilotClarificationSubmission | undefined) {
     const question = rawQuestion.trim();
-    if (!question || isSubmitting) return;
+    if (!isReady || !question || isSubmitting) return;
 
     setInput("");
     setIsSubmitting(true);
@@ -258,7 +261,7 @@ export function CopilotPanel({ isOpen, onClose, projectName }: CopilotPanelProps
       >
       <header className="flex items-center justify-between gap-3 border-b border-hairline-soft bg-canvas-raised/92 px-4 py-3.5 backdrop-blur-[18px]">
         <div className="flex items-center gap-2.5 min-w-0">
-          <CopilotMark showStatusDot />
+          <CopilotMark showStatusDot={isReady} />
           <div className="grid gap-0.5 min-w-0">
             <h2 className="m-0 text-[17px] font-[700] leading-tight text-ink">Copilot</h2>
             <span className="inline-flex items-center gap-1.5 text-[11px] font-[650] text-ink-muted">
@@ -296,6 +299,7 @@ export function CopilotPanel({ isOpen, onClose, projectName }: CopilotPanelProps
       </header>
 
       <div aria-live="polite" className="grid min-h-0 content-start gap-4 overflow-y-auto p-4">
+        {availability !== "available" ? <CopilotSetupNotice availability={availability} /> : (<>
         {messages.length <= 1 ? (
           <section className="grid gap-3 rounded-2xl border border-accent/20 bg-[linear-gradient(145deg,rgba(0,153,255,0.1),rgba(255,255,255,0.02))] p-3.5">
             <div className="flex items-start gap-2.5">
@@ -340,6 +344,7 @@ export function CopilotPanel({ isOpen, onClose, projectName }: CopilotPanelProps
             </div>
           ) : null}
         </section>
+        </>)}
       </div>
 
       <form
@@ -353,7 +358,7 @@ export function CopilotPanel({ isOpen, onClose, projectName }: CopilotPanelProps
           <TextArea
             aria-label={t("copilot.askLabel")}
             className="min-h-16 !resize-none rounded-xl border-0 bg-transparent px-2.5 py-2.5 shadow-none focus:border-0 focus:shadow-none"
-            disabled={isSubmitting}
+            disabled={!isReady || isSubmitting}
             onChange={(event) => setInput(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === "Enter" && !event.shiftKey) {
@@ -365,7 +370,7 @@ export function CopilotPanel({ isOpen, onClose, projectName }: CopilotPanelProps
             rows={2}
             value={input}
           />
-          <Button aria-label={t("copilot.sendLabel")} className="mb-0.5 mr-0.5 min-h-9 min-w-9 rounded-xl !bg-[linear-gradient(145deg,var(--color-ink),var(--color-accent))] px-0 shadow-[0_6px_16px_rgba(0,153,255,0.18)] hover:enabled:scale-[1.03]" disabled={!input.trim()} isLoading={isSubmitting} type="submit" variant="primary">
+          <Button aria-label={t("copilot.sendLabel")} className="mb-0.5 mr-0.5 min-h-9 min-w-9 rounded-xl !bg-[linear-gradient(145deg,var(--color-ink),var(--color-accent))] px-0 shadow-[0_6px_16px_rgba(0,153,255,0.18)] hover:enabled:scale-[1.03]" disabled={!isReady || !input.trim()} isLoading={isSubmitting} type="submit" variant="primary">
             <Send size={15} strokeWidth={2.2} />
           </Button>
         </div>

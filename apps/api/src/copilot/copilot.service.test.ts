@@ -33,7 +33,7 @@ describe("answerCopilotQuestion", () => {
   });
 
   it("reports an unconfigured server as unavailable", async () => {
-    for (const name of ["COPILOT_API_KEY", "QWEN_API_KEY", "COPILOT_BASE_URL", "COPILOT_QWEN_BASE_URL", "COPILOT_MODEL", "COPILOT_QWEN_MODEL", "COPILOT_API_FORMAT", "COPILOT_EXTRA_BODY"]) vi.stubEnv(name, "");
+    for (const name of ["COPILOT_API_KEY", "COPILOT_BASE_URL", "COPILOT_MODEL", "COPILOT_API_FORMAT", "COPILOT_EXTRA_BODY"]) vi.stubEnv(name, "");
     await expect(getCopilotStatus()).resolves.toMatchObject({ available: false, api_format: null, model: null });
   });
 });

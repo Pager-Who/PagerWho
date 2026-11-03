@@ -7,7 +7,7 @@ import { HttpError } from "../http/errors/http-error";
 import { fromChatCompletion, readCopilotConfig, requestCopilotModel, toChatMessages } from "./model-client";
 
 const COPILOT_ENV = ["COPILOT_API_FORMAT", "COPILOT_API_KEY", "COPILOT_BASE_URL", "COPILOT_MODEL", "COPILOT_EXTRA_BODY",
-  "COPILOT_ALLOW_INSECURE_HTTP", "QWEN_API_KEY", "COPILOT_QWEN_BASE_URL", "COPILOT_QWEN_MODEL"];
+  "COPILOT_ALLOW_INSECURE_HTTP"];
 
 function configure(values: Record<string, string>) {
   for (const name of COPILOT_ENV) vi.stubEnv(name, values[name] ?? "");
@@ -39,14 +39,6 @@ describe("Copilot model configuration", () => {
   it("allows plain HTTP only with an explicit opt-in", () => {
     configure({ COPILOT_API_KEY: "k", COPILOT_BASE_URL: "http://ollama:11434/v1/", COPILOT_MODEL: "m", COPILOT_ALLOW_INSECURE_HTTP: "true" });
     expect(readCopilotConfig()).toMatchObject({ status: "configured", config: { baseUrl: "http://ollama:11434/v1", apiFormat: "responses" } });
-  });
-
-  it("keeps legacy Qwen Cloud variables working with their previous defaults", () => {
-    configure({ QWEN_API_KEY: "k" });
-    expect(readCopilotConfig()).toMatchObject({ status: "configured", config: {
-      apiFormat: "responses", model: "qwen3.7-flash", extraBody: { enable_thinking: false },
-      baseUrl: "https://ap-southeast-1.maas.qwencloudapi.com/compatible-mode/v1",
-    } });
   });
 });
 

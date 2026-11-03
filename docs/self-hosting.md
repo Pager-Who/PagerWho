@@ -79,8 +79,8 @@ using encrypted provider credentials.
 
 Copilot is off by default. To enable it, set `COPILOT_API_KEY`,
 `COPILOT_BASE_URL` and `COPILOT_MODEL` on the API for any OpenAI-compatible
-provider (hosted or self-hosted), then restart the API. Without them the web app
-hides all Copilot features and the API rejects Copilot requests. See
+provider (hosted or self-hosted), then restart the API. Without them Copilot entry
+points show a setup-required notice and the API rejects Copilot requests. See
 [Copilot setup](copilot.md) for API formats, provider examples, usage limits and
 the data sent to the provider. Copilot needs the `copilot_usage_counters` and
 `copilot_proposals` tables created by the committed migrations.

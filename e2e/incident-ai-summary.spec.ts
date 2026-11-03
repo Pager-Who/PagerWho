@@ -60,7 +60,7 @@ test("recovers from a provider error and marks an old summary as stale", async (
   await expect(panel.getByText("This incident has changed. Regenerate the summary before using it.")).toBeVisible();
 });
 
-test("hides AI features when the server has no Copilot model provider configured", async ({ page }) => {
+test("explains the required setup instead of calling AI when no Copilot model provider is configured", async ({ page }) => {
   await authenticateSession(page, { workspaceId: e2eWorkspaceId });
   await mockIncidentLifecycleFlow(page, { seedIncident: true });
   const copilotCalls: string[] = [];
@@ -71,7 +71,8 @@ test("hides AI features when the server has no Copilot model provider configured
   await mockCopilotAvailable(page, false);
   await page.goto(`/incidents/${e2eIncidentId}`);
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-  await expect(page.getByRole("region", { name: "AI incident summary", exact: true })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Copilot", exact: true })).toHaveCount(0);
+  const panel = page.getByRole("region", { name: "AI incident summary", exact: true });
+  await panel.getByRole("button", { name: "Generate AI summary" }).click();
+  await expect(panel.getByRole("status", { name: "Copilot setup required" })).toBeVisible();
   expect(copilotCalls).toEqual([]);
 });

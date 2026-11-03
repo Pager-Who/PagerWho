@@ -1,21 +1,28 @@
 import type { CopilotLocale, Incident } from "@im/contracts";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { Button, DescriptionList, ErrorState, Panel } from "../../../shared/components";
+import { CopilotSetupNotice, type CopilotAvailability } from "../../../shared/copilot";
 import { LocalizedText, normalizeLocale } from "../../../shared/i18n";
 import { formatDateTime } from "../../../shared/utils";
 import { useIncidentSummaryMutation } from "../queries";
 
-export function IncidentSummaryPanel({ incident }: { incident: Incident }) {
+type IncidentSummaryPanelProps = { availability: CopilotAvailability; incident: Incident };
+
+export function IncidentSummaryPanel({ availability, incident }: IncidentSummaryPanelProps) {
   const { i18n } = useTranslation();
   const locale = normalizeLocale(i18n.resolvedLanguage ?? i18n.language);
-  return <SummaryContent key={`${incident.id}:${locale}`} incident={incident} locale={locale} />;
+  return <SummaryContent availability={availability} key={`${incident.id}:${locale}`} incident={incident} locale={locale} />;
 }
 
-function SummaryContent({ incident, locale }: { incident: Incident; locale: CopilotLocale }) {
+function SummaryContent({ availability, incident, locale }: IncidentSummaryPanelProps & { locale: CopilotLocale }) {
   const mutation = useIncidentSummaryMutation(incident.id, locale);
+  const [setupRequested, setSetupRequested] = useState(false);
   const summary = mutation.data;
   const stale = summary && Date.parse(summary.source_updated_at) !== Date.parse(incident.updated_at);
+  // Without a configured model provider, the button explains the required setup instead of calling the API.
+  const generate = () => (availability === "available" ? mutation.mutate() : setSetupRequested(true));
   return (
     <LocalizedText>
       <Panel aria-label="AI incident summary" className="grid gap-4">
@@ -24,11 +31,12 @@ function SummaryContent({ incident, locale }: { incident: Incident; locale: Copi
             <h2 className="m-0 text-base font-semibold text-ink">AI incident summary</h2>
             <p className="m-0 max-w-prose text-xs leading-relaxed text-ink-muted">Summarize this incident and suggest three checks for your response.</p>
           </div>
-          <Button isLoading={mutation.isPending} onClick={() => mutation.mutate()} size="sm" variant="ghost">
+          <Button isLoading={mutation.isPending} onClick={generate} size="sm" variant="ghost">
             {mutation.isPending ? "Generating summary..." : summary ? "Regenerate summary" : "Generate AI summary"}
           </Button>
         </div>
         <p className="m-0 max-w-prose text-xs leading-relaxed text-ink-muted">Uses incident details and recorded response history. Root cause, impact, metrics and logs are not verified. No changes are applied.</p>
+        {setupRequested && availability !== "available" ? <CopilotSetupNotice availability={availability} /> : null}
         {mutation.error ? <ErrorState error={mutation.error} onRetry={() => mutation.mutate()} title="Could not generate incident summary" /> : null}
         {mutation.isPending ? <p className="m-0 text-sm text-ink-muted" role="status">Generating summary...</p> : null}
         {summary ? (

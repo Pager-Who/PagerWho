@@ -8,7 +8,7 @@ import { workspaceApi } from "../api/client";
 import { queryKeys } from "../api/queryKeys";
 import { hasWorkspacePermission, useAuth } from "../auth";
 import { BrandMark, CopilotMark } from "../components";
-import { useCopilotAvailable } from "../copilot";
+import { useCopilotAvailability } from "../copilot";
 import { ThemeToggleButton } from "../theme";
 import { cn } from "../utils";
 import { ActionCenter } from "./ActionCenter";
@@ -32,7 +32,7 @@ export function AppLayout() {
   const location = useLocation();
   const queryClient = useQueryClient();
   const { isPlatformAdmin, logout, projectId, selectProject } = useAuth();
-  const isCopilotAvailable = useCopilotAvailable();
+  const copilotAvailability = useCopilotAvailability();
   const [isCopilotOpen, setIsCopilotOpen] = useState(false);
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [isUtilityMenuOpen, setIsUtilityMenuOpen] = useState(false);
@@ -137,21 +137,19 @@ export function AppLayout() {
           <div className="flex items-center gap-1">
             <ActionCenter canViewOperations={canViewOperations} projectId={projectId} />
 
-            {isCopilotAvailable ? (
-              <button
-                aria-label={t("nav.copilot")}
-                aria-pressed={isCopilotOpen}
-                className={cn(
-                  "inline-flex h-8.5 w-8.5 shrink-0 cursor-pointer items-center justify-center rounded-xl border-0 bg-transparent p-0 transition-transform duration-120 ease hover:scale-[1.04] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent",
-                  isCopilotOpen ? "bg-surface-2 text-ink" : "",
-                )}
-                onClick={() => setIsCopilotOpen((current) => !current)}
-                title={t("nav.copilot")}
-                type="button"
-              >
-                <CopilotMark iconSize={14} size="sm" />
-              </button>
-            ) : null}
+            <button
+              aria-label={t("nav.copilot")}
+              aria-pressed={isCopilotOpen}
+              className={cn(
+                "inline-flex h-8.5 w-8.5 shrink-0 cursor-pointer items-center justify-center rounded-xl border-0 bg-transparent p-0 transition-transform duration-120 ease hover:scale-[1.04] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent",
+                isCopilotOpen ? "bg-surface-2 text-ink" : "",
+              )}
+              onClick={() => setIsCopilotOpen((current) => !current)}
+              title={t("nav.copilot")}
+              type="button"
+            >
+              <CopilotMark iconSize={14} size="sm" />
+            </button>
 
             <Link
               aria-label="Documentation"
@@ -388,9 +386,7 @@ export function AppLayout() {
         ) : null}
       </header>
 
-      {isCopilotAvailable ? (
-        <CopilotPanel key={projectId ?? "no-project"} isOpen={isCopilotOpen} onClose={() => setIsCopilotOpen(false)} projectName={currentProject?.name} />
-      ) : null}
+      <CopilotPanel availability={copilotAvailability} key={projectId ?? "no-project"} isOpen={isCopilotOpen} onClose={() => setIsCopilotOpen(false)} projectName={currentProject?.name} />
       <main className="min-w-0 p-4 sm:p-7.5 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0)_240px),var(--color-canvas)]">
         <div className="mx-auto max-w-295 min-w-0 w-full">
           <Outlet />

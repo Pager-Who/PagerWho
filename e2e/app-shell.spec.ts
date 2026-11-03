@@ -17,7 +17,14 @@ for (const width of [390, 1440]) {
     await mockCopilotAvailable(page, false);
     await page.goto("/incidents");
     await expect(page.getByRole("heading", { name: "Incidents", exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Copilot", exact: true })).toHaveCount(0);
+    const copilotButton = page.getByRole("button", { name: "Copilot", exact: true });
+    await expect(copilotButton).toBeVisible();
+    await copilotButton.click();
+    const copilotPanel = page.getByRole("dialog", { name: "Copilot" });
+    await expect(copilotPanel.getByRole("status", { name: "Copilot setup required" })).toBeVisible();
+    await expect(copilotPanel.getByText("COPILOT_API_KEY", { exact: true })).toBeVisible();
+    await expect(copilotPanel.getByRole("textbox")).toBeDisabled();
+    await copilotPanel.getByRole("button", { name: "Close Copilot" }).click();
     await expect(page.getByRole("link", { name: "Documentation", exact: true })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.screenshot({ path: testInfo.outputPath(`incident-workspace-${width}.png`), fullPage: true });
@@ -27,10 +34,13 @@ for (const width of [390, 1440]) {
   });
 }
 
-test("shows the Copilot entry point when the server has a model provider configured", async ({ page }) => {
+test("opens a usable Copilot when the server has a model provider configured", async ({ page }) => {
   await authenticateSession(page, { workspaceId: e2eWorkspaceId });
   await mockIncidentLifecycleFlow(page);
   await mockCopilotAvailable(page);
   await page.goto("/incidents");
-  await expect(page.getByRole("button", { name: "Copilot", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Copilot", exact: true }).click();
+  const copilotPanel = page.getByRole("dialog", { name: "Copilot" });
+  await expect(copilotPanel.getByRole("textbox")).toBeEnabled();
+  await expect(copilotPanel.getByRole("status", { name: "Copilot setup required" })).toHaveCount(0);
 });
