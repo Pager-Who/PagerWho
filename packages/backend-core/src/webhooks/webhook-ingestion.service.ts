@@ -68,6 +68,21 @@ export class WebhookIngestionService {
     this.incidentService = new IncidentService(db);
   }
 
+  // Uses the same normalization as receive(), but never returns payload fields or identifiers.
+  detectPayloadFormat(payload: unknown) {
+    const object = this.asObject(payload);
+    return this.isGrafanaPayload(object) ? "grafana"
+      : this.isSentryPayload(object) ? "sentry"
+        : this.isDatadogPayload(object) ? "datadog" : "generic";
+  }
+
+  previewPayload(payload: unknown) {
+    const format = this.detectPayloadFormat(payload);
+    const event = this.normalizePayload(payload);
+    return { format, severity: event.severity, priority: event.priority, status: event.status,
+      has_description: Boolean(event.description) };
+  }
+
   async receive(
     endpointId: string,
     payload: unknown,

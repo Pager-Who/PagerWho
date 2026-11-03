@@ -16,3 +16,4 @@ test("rejects shared secrets across different purposes", () => assert(validateDe
 
 test("warns when optional authentication integrations are not configured", () => assert(deploymentWarnings(base()).some(w => w.includes("Password users can sign in"))));
 test("configured SMTP suppresses the onboarding warning", () => assert.deepEqual(deploymentWarnings({ ...base(), SMTP_HOST: "smtp.test", SMTP_USER: "audit", SMTP_PASSWORD: "synthetic" }), []));
+test("Copilot stays optional but rejects partial provider configuration", () => { assert.deepEqual(validateDeploymentEnv({ ...base(), COPILOT_API_KEY: "", COPILOT_API_FORMAT: "" }, "prod"), []); assert(validateDeploymentEnv({ ...base(), COPILOT_API_KEY: "synthetic" }, "prod").some(e => e.includes("COPILOT_MODEL"))); assert(validateDeploymentEnv({ ...base(), COPILOT_API_FORMAT: "other" }, "prod").some(e => e.includes("COPILOT_API_FORMAT"))); });

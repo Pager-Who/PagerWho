@@ -45,6 +45,7 @@ only when you intentionally want to remove the local database.
 - Slack, SMTP email, SMS, and phone notification providers.
 - Event-driven workflow automation.
 - Project roles, audit logs, and operational diagnostics.
+- Optional AI Copilot using your own OpenAI-compatible model provider.
 
 ## PagerWho Cloud
 
@@ -60,6 +61,7 @@ secrets, PostgreSQL, and the notification and authentication integrations you
 need.
 
 - [Self-hosting and configuration](docs/self-hosting.md)
+- [Optional Copilot and model providers](docs/copilot.md)
 - [Production deployment](docs/deployment.md)
 - [Local development and checks](docs/development.md)
 - [Architecture](docs/architecture.md)

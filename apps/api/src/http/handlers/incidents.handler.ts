@@ -4,6 +4,7 @@ import {
   IncidentFilterSchema,
   IncidentNotificationsQuerySchema,
   IncidentTimelineQuerySchema,
+  IncidentSummaryRequestSchema,
   ManualEscalationRequestSchema,
   UpdateIncidentPriorityRequestSchema,
   UuidSchema,
@@ -23,10 +24,21 @@ import { getRequiredActorUserId } from "../auth/user-context";
 import { assertActorWorkspaceMember, getActorWorkspaceIds } from "../auth/workspace-access";
 import { HttpError } from "../errors/http-error";
 import { mapWorkspaceError } from "./workspaces.handler";
+import { summarizeIncident } from "../../copilot/incident-summary";
 
 const incidentService = new IncidentService(prisma);
 const escalationService = new EscalationService(prisma);
 const workspaceService = new WorkspaceService(prisma);
+
+export const summarizeIncidentHandler: RequestHandler = async (req, res, next) => {
+  try {
+    const actor = getRequiredActorUserId(req);
+    const incidentId = parseIncidentId(req.params.incidentId);
+    const body = IncidentSummaryRequestSchema.safeParse(req.body ?? {});
+    if (!body.success) throw new HttpError(400, "invalid_incident_summary_request", "Invalid incident summary request");
+    res.json({ data: await summarizeIncident(incidentId, actor, body.data.locale) });
+  } catch (error) { next(mapIncidentError(error)); }
+};
 
 export const listIncidentsHandler: RequestHandler = async (req, res, next) => {
   try {

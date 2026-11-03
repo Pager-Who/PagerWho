@@ -914,3 +914,28 @@ model AnalyticsEvent {
   @@index([createdAt])
   @@map("analytics_events")
 }
+
+// Shared Copilot request/token counters so limits hold across API replicas.
+model CopilotUsageCounter {
+  bucket       String   @id
+  requestCount Int      @default(0) @map("request_count")
+  tokenCount   Int      @default(0) @map("token_count")
+  expiresAt    DateTime @map("expires_at")
+
+  @@index([expiresAt])
+  @@map("copilot_usage_counters")
+}
+
+// Server-owned Copilot proposals awaiting approval; shared so any API replica can execute them exactly once.
+model CopilotProposal {
+  id          String   @id
+  actorUserId String   @map("actor_user_id")
+  proposal    Json
+  fingerprint String
+  expiresAt   DateTime @map("expires_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([actorUserId, expiresAt])
+  @@index([expiresAt])
+  @@map("copilot_proposals")
+}

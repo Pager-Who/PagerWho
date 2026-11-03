@@ -1,3 +1,5 @@
+import { copilotKoStatic, copilotNavLabel, copilotTranslation, copilotZhCNStatic } from "./copilotText";
+
 export const defaultLocale = "en";
 export const localeStorageKey = "pagerwho.locale";
 
@@ -2259,13 +2261,14 @@ const adminZhCNStatic: Record<string, string> = {
 
 export const staticTextByLocale: Record<AppLocale, Record<string, string>> = {
   en: enStatic,
-  ko: { ...koStatic, ...additionalKoStatic, ...adminKoStatic },
-  "zh-CN": { ...zhCNStatic, ...additionalZhCNStatic, ...adminZhCNStatic },
+  ko: { ...koStatic, ...additionalKoStatic, ...adminKoStatic, ...copilotKoStatic },
+  "zh-CN": { ...zhCNStatic, ...additionalZhCNStatic, ...adminZhCNStatic, ...copilotZhCNStatic },
 };
 
 export const resources = {
   en: {
     translation: {
+      copilot: copilotTranslation.en,
       language: {
         description: "Choose the language used for navigation, settings, labels, and system UI.",
         fieldLabel: "Display language",
@@ -2273,6 +2276,7 @@ export const resources = {
         title: "Language",
       },
       nav: {
+        copilot: copilotNavLabel.en,
         actionCenter: "Action Center",
         currentProject: "Current project",
         escalation: "Escalation",
@@ -2309,6 +2313,7 @@ export const resources = {
   },
   ko: {
     translation: {
+      copilot: copilotTranslation.ko,
       language: {
         description: "탐색, 설정, 라벨, 시스템 UI에 사용할 언어를 선택합니다.",
         fieldLabel: "표시 언어",
@@ -2316,6 +2321,7 @@ export const resources = {
         title: "언어",
       },
       nav: {
+        copilot: copilotNavLabel.ko,
         actionCenter: "액션 센터",
         currentProject: "현재 프로젝트",
         escalation: "에스컬레이션",
@@ -2352,6 +2358,7 @@ export const resources = {
   },
   "zh-CN": {
     translation: {
+      copilot: copilotTranslation["zh-CN"],
       language: {
         description: "选择导航、设置、标签和系统界面使用的语言。",
         fieldLabel: "显示语言",
@@ -2359,6 +2366,7 @@ export const resources = {
         title: "语言",
       },
       nav: {
+        copilot: copilotNavLabel["zh-CN"],
         actionCenter: "操作中心",
         currentProject: "当前项目",
         escalation: "升级",
