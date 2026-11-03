@@ -1,5 +1,6 @@
 export * from "./client";
 export * from "./auth";
+export * from "./copilot";
 export * from "./activity";
 export * from "./incidents";
 export * from "./services";

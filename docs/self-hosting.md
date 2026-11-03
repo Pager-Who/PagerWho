@@ -75,6 +75,16 @@ Authentication SMTP is separate from project incident-notification SMTP. The
 API and worker must share `PROVIDER_CREDENTIAL_ENCRYPTION_KEY` when storing and
 using encrypted provider credentials.
 
+## Optional Copilot
+
+Copilot is off by default. To enable it, set `COPILOT_API_KEY`,
+`COPILOT_BASE_URL` and `COPILOT_MODEL` on the API for any OpenAI-compatible
+provider (hosted or self-hosted), then restart the API. Without them the web app
+hides all Copilot features and the API rejects Copilot requests. See
+[Copilot setup](copilot.md) for API formats, provider examples, usage limits and
+the data sent to the provider. Copilot needs the `copilot_usage_counters` and
+`copilot_proposals` tables created by the committed migrations.
+
 ## Installation limits
 
 There are no Free/Pro feature tiers. Configure the same values for the API and

@@ -1,4 +1,4 @@
-import type { DocsSection } from "./docsContent";
+import type { DocsSection } from "./product-docs";
 
 export type DocsTranslation = {
   description: string;
