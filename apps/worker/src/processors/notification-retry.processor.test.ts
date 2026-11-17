@@ -3,7 +3,7 @@ import type { PrismaClient } from "@im/db";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { NotificationProviderError, type NotificationProvider } from "../providers/notification-provider";
-import { NotificationRetryProcessor } from "./notification-retry.processor";
+import { buildResponseActions, NotificationRetryProcessor } from "./notification-retry.processor";
 
 describe("NotificationRetryProcessor", () => {
   const originalEnv = { ...process.env };
@@ -212,3 +212,40 @@ function createDb(input: {
     },
   } as unknown as PrismaClient;
 }
+
+describe("buildResponseActions", () => {
+  const originalEnv = { ...process.env };
+  const responderNotification = {
+    event_action: "incident.created",
+    target_id: "11111111-1111-4111-8111-111111111111",
+    target_type: "primary_on_call",
+  } as const;
+  const triggeredIncident = { id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1", status: "triggered" };
+
+  afterEach(() => {
+    process.env = { ...originalEnv };
+  });
+
+  it("builds signed web and voice acknowledge URLs for a responder page", () => {
+    process.env.WEB_APP_BASE_URL = "https://pagerwho.test/";
+    process.env.PROVIDER_CREDENTIAL_ENCRYPTION_KEY = "test-provider-key-with-at-least-32-characters";
+
+    const actions = buildResponseActions(responderNotification, triggeredIncident);
+
+    expect(actions?.ackUrl).toMatch(/^https:\/\/pagerwho\.test\/ack\/[A-Za-z0-9_-]{71}$/);
+    expect(actions?.voiceAckUrl).toMatch(/^https:\/\/pagerwho\.test\/api\/v1\/incident-actions\/voice\/[A-Za-z0-9_-]{71}$/);
+  });
+
+  it("skips channel targets, lifecycle events, non-triggered incidents, and missing base URLs", () => {
+    process.env.WEB_APP_BASE_URL = "https://pagerwho.test";
+    process.env.PROVIDER_CREDENTIAL_ENCRYPTION_KEY = "test-provider-key-with-at-least-32-characters";
+
+    expect(buildResponseActions({ ...responderNotification, target_type: "team_channel", target_id: "https://hooks.slack.com/services/x" }, triggeredIncident)).toBeNull();
+    expect(buildResponseActions({ ...responderNotification, event_action: "incident.resolved" }, triggeredIncident)).toBeNull();
+    expect(buildResponseActions(responderNotification, { ...triggeredIncident, status: "acknowledged" })).toBeNull();
+
+    delete process.env.WEB_APP_BASE_URL;
+    delete process.env.APP_BASE_URL;
+    expect(buildResponseActions(responderNotification, triggeredIncident)).toBeNull();
+  });
+});

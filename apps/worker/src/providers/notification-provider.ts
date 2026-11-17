@@ -36,12 +36,19 @@ export type NotificationLogContext = {
   eventAction?: string;
 };
 
+// Signed acknowledge links, present only when the notification targets a responder of an open incident.
+export type NotificationResponseActions = {
+  ackUrl: string;
+  voiceAckUrl: string;
+};
+
 export type NotificationProviderMessage = {
   targetAddress: string;
   subject: string;
   body: string;
   incident: NotificationIncidentContext;
   notification: NotificationLogContext;
+  actions?: NotificationResponseActions;
   providerSettings?: NotificationProviderSettings;
 };
 

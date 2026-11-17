@@ -27,6 +27,26 @@ describe("SlackProvider", () => {
     });
   });
 
+  it("puts an Acknowledge button before Open incident when actions exist", async () => {
+    process.env.NOTIFICATION_DELIVERY_MODE = "live";
+    const fetchMock = vi.fn().mockResolvedValue(new Response("ok", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await new SlackProvider().send(createMessage({
+      actions: {
+        ackUrl: "https://pagerwho.test/ack/token123",
+        voiceAckUrl: "https://pagerwho.test/api/v1/incident-actions/voice/token123",
+      },
+    }));
+
+    const body = JSON.parse(fetchMock.mock.calls[0]?.[1].body as string) as { blocks: Array<{ type: string; elements?: Array<{ text: { text: string }; url: string }> }> };
+    const actions = body.blocks.find((block) => block.type === "actions");
+    expect(actions?.elements?.map((element) => element.text.text)).toEqual(
+      expect.arrayContaining(["Acknowledge"]),
+    );
+    expect(actions?.elements?.[0]?.url).toBe("https://pagerwho.test/ack/token123");
+  });
+
   it("requires a registered Slack incoming webhook URL in live mode", async () => {
     process.env.NOTIFICATION_DELIVERY_MODE = "live";
     await expect(new SlackProvider().send(createMessage({
