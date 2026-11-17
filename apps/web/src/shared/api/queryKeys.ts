@@ -17,10 +17,13 @@ export const queryKeys = {
   incidents: {
     all: ["incidents"] as const,
     list: (filters: Partial<IncidentFilter> = {}) => ["incidents", "list", filters] as const,
+    counts: (filters: Partial<IncidentFilter> = {}) => ["incidents", "counts", filters] as const,
+    metrics: (workspaceId: string, days: number) => ["incidents", "metrics", workspaceId, days] as const,
     detail: (incidentId: string) => ["incidents", "detail", incidentId] as const,
     timeline: (incidentId: string) => ["incidents", "timeline", incidentId] as const,
     notifications: (incidentId: string) => ["incidents", "notifications", incidentId] as const,
     escalation: (incidentId: string) => ["incidents", "escalation", incidentId] as const,
+    actionLink: (token: string) => ["incidents", "action-link", token] as const,
   },
   services: {
     all: ["services"] as const,
@@ -50,6 +53,8 @@ export const queryKeys = {
     current: (serviceId?: string) => ["on-call", "current", serviceId ?? null] as const,
     schedules: (filters: WorkspaceScopedFilters = {}) => ["on-call", "schedules", filters] as const,
     schedule: (scheduleId: string) => ["on-call", "schedules", scheduleId] as const,
+    myShifts: (filters: WorkspaceScopedFilters = {}) => ["on-call", "my-shifts", filters] as const,
+    calendarFeed: ["on-call", "calendar-feed"] as const,
   },
   escalationPolicies: {
     all: ["escalation-policies"] as const,

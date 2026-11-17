@@ -14,6 +14,7 @@ import {
   LoadingState,
   MetricCard,
   NumberInput,
+  Select,
   PageHeader,
   Panel,
   StateBlock,
@@ -144,6 +145,7 @@ export function UserSettingsPage() {
           channel,
           delay_seconds: preference?.delay_seconds ?? 0,
           enabled: preference?.enabled ?? false,
+          max_priority: preference?.max_priority ?? null,
         };
       }),
       smsPhoneNumber: "",
@@ -900,6 +902,19 @@ function NotificationChannelCard({
           onChange={(event) => onChange({ delay_seconds: Number(event.target.value) })}
           value={preference.delay_seconds}
         />
+      </Field>
+      <Field label="Use for" hint="Lower-priority incidents skip this route.">
+        <Select
+          disabled={disabled || !isReady}
+          onChange={(event) => onChange({ max_priority: (event.target.value || null) as UserNotificationChannelPreference["max_priority"] })}
+          value={preference.max_priority ?? ""}
+        >
+          <option value="">All priorities</option>
+          <option value="P1">P1 only</option>
+          <option value="P2">P1–P2</option>
+          <option value="P3">P1–P3</option>
+          <option value="P4">P1–P4</option>
+        </Select>
       </Field>
     </article>
   );

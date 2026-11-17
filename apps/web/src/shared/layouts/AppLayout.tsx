@@ -1,13 +1,13 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, BookOpenText, ChevronDown, GitBranch, Layers, LogOut, Menu, Phone, Settings, Shield, UserRound, X, LayoutDashboard, Workflow as WorkflowIcon } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 
 import { workspaceApi } from "../api/client";
 import { queryKeys } from "../api/queryKeys";
 import { hasWorkspacePermission, useAuth } from "../auth";
-import { BrandMark, CopilotMark } from "../components";
+import { BrandMark, CopilotMark, Skeleton } from "../components";
 import { useCopilotAvailability } from "../copilot";
 import { ThemeToggleButton } from "../theme";
 import { cn } from "../utils";
@@ -389,7 +389,10 @@ export function AppLayout() {
       <CopilotPanel availability={copilotAvailability} key={projectId ?? "no-project"} isOpen={isCopilotOpen} onClose={() => setIsCopilotOpen(false)} projectName={currentProject?.name} />
       <main className="min-w-0 p-4 sm:p-7.5 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0)_240px),var(--color-canvas)]">
         <div className="mx-auto max-w-295 min-w-0 w-full">
-          <Outlet />
+          {/* Keeps the shell mounted while a lazily loaded page chunk downloads. */}
+          <Suspense fallback={<Skeleton aria-label="Loading page" className="h-40 w-full" />}>
+            <Outlet />
+          </Suspense>
         </div>
       </main>
     </div>

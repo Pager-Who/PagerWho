@@ -127,6 +127,7 @@ function buildSmsBody(message: NotificationProviderMessage): string {
   const lines = [
     message.subject,
     `Status: ${message.incident.status}`,
+    message.actions ? `Ack: ${message.actions.ackUrl}` : null,
     message.incident.url ? `Open: ${message.incident.url}` : null,
   ];
 
@@ -141,14 +142,25 @@ function buildVoiceTwiml(message: NotificationProviderMessage): string {
       : message.notification.eventAction === "incident.priority_updated"
         ? `The incident priority changed to ${message.incident.priority}.`
         : "Please acknowledge or resolve the incident.";
-  const spoken = [
+  const summary = [
     "Incident alert.",
     `${message.incident.priority} ${message.incident.severity} severity incident on ${message.incident.service.name}.`,
     message.incident.title,
-    lifecycleMessage,
   ].join(" ");
 
-  return `<Response><Say>${escapeXml(spoken)}</Say></Response>`;
+  if (message.actions) {
+    // Keypad acknowledge: Twilio posts the pressed digit to the signed callback URL.
+    return [
+      "<Response>",
+      `<Gather numDigits="1" timeout="8" method="POST" action="${escapeXml(message.actions.voiceAckUrl)}">`,
+      `<Say>${escapeXml(`${summary} Press 1 to acknowledge.`)}</Say>`,
+      "</Gather>",
+      "<Say>No input received. The incident was not acknowledged.</Say>",
+      "</Response>",
+    ].join("");
+  }
+
+  return `<Response><Say>${escapeXml(`${summary} ${lifecycleMessage}`)}</Say></Response>`;
 }
 
 function isE164PhoneNumber(value: string): boolean {

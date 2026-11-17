@@ -1,11 +1,15 @@
 import {
+  CreateIncidentNoteRequestSchema,
   CreateIncidentRequestSchema,
   IncidentActionRequestSchema,
+  IncidentCountsQuerySchema,
   IncidentFilterSchema,
+  IncidentMetricsQuerySchema,
   IncidentNotificationsQuerySchema,
   IncidentTimelineQuerySchema,
   IncidentSummaryRequestSchema,
   ManualEscalationRequestSchema,
+  ReassignIncidentRequestSchema,
   UpdateIncidentPriorityRequestSchema,
   UuidSchema,
 } from "@im/contracts";
@@ -61,6 +65,93 @@ export const listIncidentsHandler: RequestHandler = async (req, res, next) => {
       ...(workspaceIds ? { workspaceIds } : {}),
     });
     res.json({ data: incidentsPage });
+  } catch (error) {
+    next(mapIncidentError(error));
+  }
+};
+
+export const countIncidentsHandler: RequestHandler = async (req, res, next) => {
+  try {
+    const parsedQuery = IncidentCountsQuerySchema.safeParse(req.query);
+
+    if (!parsedQuery.success) {
+      throw new HttpError(400, "invalid_incident_filter", "Invalid incident filter", parsedQuery.error.flatten());
+    }
+
+    const workspaceIds = parsedQuery.data.workspace_id
+      ? undefined
+      : await getActorWorkspaceIds(req);
+
+    if (parsedQuery.data.workspace_id) {
+      await assertActorWorkspaceMember(req, parsedQuery.data.workspace_id);
+    }
+
+    res.json({ data: await incidentService.countIncidents({
+      ...parsedQuery.data,
+      ...(workspaceIds ? { workspaceIds } : {}),
+    }) });
+  } catch (error) {
+    next(mapIncidentError(error));
+  }
+};
+
+export const getIncidentMetricsHandler: RequestHandler = async (req, res, next) => {
+  try {
+    const parsedQuery = IncidentMetricsQuerySchema.safeParse(req.query);
+
+    if (!parsedQuery.success) {
+      throw new HttpError(400, "invalid_incident_metrics_query", "Invalid incident metrics query", parsedQuery.error.flatten());
+    }
+
+    await assertActorWorkspaceMember(req, parsedQuery.data.workspace_id);
+    res.json({ data: await incidentService.getIncidentMetrics(parsedQuery.data.workspace_id, parsedQuery.data.days) });
+  } catch (error) {
+    next(mapIncidentError(error));
+  }
+};
+
+export const addIncidentNoteHandler: RequestHandler = async (req, res, next) => {
+  try {
+    const incidentId = parseIncidentId(req.params.incidentId);
+    const parsedBody = CreateIncidentNoteRequestSchema.safeParse(req.body);
+
+    if (!parsedBody.success) {
+      throw new HttpError(400, "invalid_incident_note", "Invalid incident note", parsedBody.error.flatten());
+    }
+
+    const actorUserId = getRequiredActorUserId(req);
+    await assertIncidentActionAccess(incidentId, actorUserId);
+
+    const entry = await incidentService.addIncidentNote(incidentId, actorUserId, parsedBody.data.message);
+    res.status(201).json({ data: entry });
+  } catch (error) {
+    next(mapIncidentError(error));
+  }
+};
+
+export const reassignIncidentHandler: RequestHandler = async (req, res, next) => {
+  try {
+    const incidentId = parseIncidentId(req.params.incidentId);
+    const parsedBody = ReassignIncidentRequestSchema.safeParse(req.body);
+
+    if (!parsedBody.success) {
+      throw new HttpError(400, "invalid_incident_reassign", "Invalid reassign request", parsedBody.error.flatten());
+    }
+
+    const actorUserId = getRequiredActorUserId(req);
+    const workspaceId = await assertIncidentActionAccess(incidentId, actorUserId);
+
+    try {
+      await workspaceService.assertWorkspacePermission(workspaceId, parsedBody.data.user_id, "incident.respond");
+    } catch (error) {
+      if (error instanceof WorkspaceError) {
+        throw new HttpError(400, "invalid_assignee", "The assignee cannot respond to incidents in this project");
+      }
+      throw error;
+    }
+
+    const incident = await incidentService.reassignIncident(incidentId, actorUserId, parsedBody.data.user_id);
+    res.json({ data: incident });
   } catch (error) {
     next(mapIncidentError(error));
   }
@@ -161,7 +252,11 @@ export const resolveIncidentHandler: RequestHandler = async (req, res, next) => 
     const actorUserId = getRequiredActorUserId(req);
     await assertIncidentActionAccess(incidentId, actorUserId);
 
-    const incident = await incidentService.resolveIncident(incidentId, actorUserId);
+    const incident = await incidentService.resolveIncident(
+      incidentId,
+      actorUserId,
+      parsedBody.data.note ? { note: parsedBody.data.note } : {},
+    );
     res.json({ data: incident });
   } catch (error) {
     next(mapIncidentError(error));
@@ -297,6 +392,7 @@ async function assertIncidentActionAccess(incidentId: string, actorUserId: strin
   }
 
   await workspaceService.assertWorkspacePermission(incident.workspaceId, actorUserId, "incident.respond");
+  return incident.workspaceId;
 }
 
 function mapIncidentError(error: unknown) {
@@ -305,7 +401,12 @@ function mapIncidentError(error: unknown) {
   }
 
   if (error instanceof IncidentError) {
-    if (error.code === "incident_not_found" || error.code === "service_not_found" || error.code === "actor_not_found") {
+    if (
+      error.code === "incident_not_found"
+      || error.code === "service_not_found"
+      || error.code === "actor_not_found"
+      || error.code === "assignee_not_found"
+    ) {
       return new HttpError(404, error.code, error.message);
     }
 

@@ -5,6 +5,7 @@ import {
   UserListQuerySchema,
   UuidSchema,
   type CheckUserPhoneVerificationRequest,
+  type IncidentPriority,
   type StartUserPhoneVerificationRequest,
   type UpdateUserNotificationPreferencesRequest,
   type User,
@@ -37,6 +38,7 @@ type PreferenceRecord = {
   channel: string;
   enabled: boolean;
   delaySeconds: number;
+  maxPriority: IncidentPriority | null;
 };
 
 type TwilioPhoneVerificationClient = {
@@ -460,10 +462,13 @@ async function updatePreferences(
         channel: preference.channel,
         enabled: preference.enabled,
         delaySeconds: preference.delay_seconds,
+        maxPriority: preference.max_priority ?? null,
       },
       update: {
         enabled: preference.enabled,
         delaySeconds: preference.delay_seconds,
+        // Omitted keeps the saved threshold so older clients do not reset it.
+        ...(preference.max_priority !== undefined ? { maxPriority: preference.max_priority } : {}),
       },
     });
   }
@@ -875,6 +880,7 @@ function mapPreferences(preferences: PreferenceRecord[]): UserNotificationChanne
       channel,
       enabled: preference?.enabled ?? false,
       delay_seconds: preference?.delaySeconds ?? 0,
+      max_priority: preference?.maxPriority ?? null,
     };
   });
 }

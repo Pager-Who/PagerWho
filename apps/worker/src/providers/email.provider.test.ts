@@ -11,7 +11,7 @@ vi.mock("nodemailer", () => ({
   },
 }));
 
-const { EmailProvider } = await import("./email.provider");
+const { buildIncidentEmailHtml, EmailProvider } = await import("./email.provider");
 
 describe("EmailProvider", () => {
   const originalEnv = { ...process.env };
@@ -42,8 +42,32 @@ describe("EmailProvider", () => {
       to: "responder@example.com",
       subject: "[P1] Checkout API is down",
       text: "Incident details",
+      html: expect.stringContaining("Checkout API is down"),
     });
     expect(result.providerMessageId).toBe("smtp-message-1");
+  });
+
+  it("escapes webhook-supplied fields and renders response buttons", () => {
+    const message = createMessage();
+    message.incident.title = "<script>alert(1)</script> & co";
+    message.incident.description = 'line "one"';
+    message.incident.url = "https://app.example.com/incidents/1";
+    message.actions = { ackUrl: "https://app.example.com/ack/token", voiceAckUrl: "https://app.example.com/api/v1/incident-actions/voice/token" };
+
+    const html = buildIncidentEmailHtml(message);
+
+    expect(html).not.toContain("<script>");
+    expect(html).toContain("&lt;script&gt;alert(1)&lt;/script&gt; &amp; co");
+    expect(html).toContain("line &quot;one&quot;");
+    expect(html).toContain('href="https://app.example.com/ack/token"');
+    expect(html).toContain('href="https://app.example.com/incidents/1"');
+  });
+
+  it("skips non-http links", () => {
+    const message = createMessage();
+    message.incident.url = "javascript:alert(1)";
+
+    expect(buildIncidentEmailHtml(message)).not.toContain("javascript:");
   });
 
   it("rejects live delivery without workspace SMTP credentials", async () => {

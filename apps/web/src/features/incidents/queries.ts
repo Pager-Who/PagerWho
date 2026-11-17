@@ -1,9 +1,19 @@
-import type { CopilotLocale, CreateIncidentRequest, IncidentFilter, IncidentPriority, ManualEscalationRequest } from "@im/contracts";
+import type {
+  CopilotLocale,
+  CreateIncidentRequest,
+  IncidentCountsQuery,
+  IncidentFilter,
+  IncidentPriority,
+  ManualEscalationRequest,
+} from "@im/contracts";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { incidentApi, serviceApi, workspaceApi } from "../../shared/api/client";
+import { incidentApi, serviceApi, userApi, workspaceApi } from "../../shared/api/client";
 import { queryKeys } from "../../shared/api/queryKeys";
 import { useAuth } from "../../shared/auth";
+
+// Keep the response view current when someone else acknowledges or escalation advances.
+const incidentRefreshIntervalMs = 30_000;
 
 export function useIncidentSummaryMutation(incidentId: string, locale: CopilotLocale) {
   return useMutation({ mutationFn: () => incidentApi.summarizeIncident(incidentId, { locale }), retry: false });
@@ -17,6 +27,37 @@ export function useIncidentList(filters: Partial<IncidentFilter>) {
     queryKey: queryKeys.incidents.list(scopedFilters),
     queryFn: () => incidentApi.listIncidents(scopedFilters),
     enabled: Boolean(projectId),
+    refetchInterval: incidentRefreshIntervalMs,
+  });
+}
+
+export function useIncidentCounts(filters: IncidentCountsQuery) {
+  const { projectId } = useAuth();
+  const scopedFilters = projectId ? { ...filters, workspace_id: projectId } : filters;
+
+  return useQuery({
+    queryKey: queryKeys.incidents.counts(scopedFilters),
+    queryFn: () => incidentApi.countIncidents(scopedFilters),
+    enabled: Boolean(projectId),
+    refetchInterval: incidentRefreshIntervalMs,
+  });
+}
+
+export function useAddIncidentNoteMutation(incidentId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (message: string) => incidentApi.addIncidentNote(incidentId, { message }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.incidents.timeline(incidentId) }),
+  });
+}
+
+export function useReassignIncidentMutation(incidentId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (userId: string) => incidentApi.reassignIncident(incidentId, { user_id: userId }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.incidents.all }),
   });
 }
 
@@ -28,6 +69,18 @@ export function useIncidentServiceOptions() {
     queryKey: queryKeys.services.list(filters),
     queryFn: () => serviceApi.listServices(filters),
     enabled: Boolean(projectId),
+  });
+}
+
+export function useIncidentUserNames() {
+  const { projectId } = useAuth();
+  const filters = projectId ? { workspace_id: projectId } : {};
+
+  return useQuery({
+    queryKey: queryKeys.users.list(filters),
+    queryFn: () => userApi.listUsers(filters),
+    enabled: Boolean(projectId),
+    select: (users) => new Map(users.map((user) => [user.id, user.name || user.email])),
   });
 }
 
@@ -54,6 +107,7 @@ export function useIncidentDetail(incidentId: string | undefined) {
       return incidentApi.getIncidentDetail(incidentId);
     },
     enabled: Boolean(incidentId),
+    refetchInterval: incidentRefreshIntervalMs,
   });
 }
 
@@ -68,6 +122,7 @@ export function useIncidentTimeline(incidentId: string | undefined) {
       return incidentApi.getIncidentTimeline(incidentId, { limit: 100 });
     },
     enabled: Boolean(incidentId),
+    refetchInterval: incidentRefreshIntervalMs,
   });
 }
 
@@ -82,6 +137,28 @@ export function useIncidentNotifications(incidentId: string | undefined) {
       return incidentApi.getIncidentNotifications(incidentId, { limit: 100 });
     },
     enabled: Boolean(incidentId),
+    refetchInterval: incidentRefreshIntervalMs,
+  });
+}
+
+export function useIncidentActionLink(token: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.incidents.actionLink(token ?? ""),
+    queryFn: () => incidentApi.getIncidentActionLink(token ?? ""),
+    enabled: Boolean(token),
+    retry: false,
+  });
+}
+
+export function useAcknowledgeIncidentActionLinkMutation(token: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: () => incidentApi.acknowledgeIncidentActionLink(token),
+    onSuccess: (link) => {
+      queryClient.setQueryData(queryKeys.incidents.actionLink(token), link);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.incidents.all });
+    },
   });
 }
 
@@ -119,7 +196,7 @@ export function useResolveIncidentMutation(incidentId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: () => incidentApi.resolveIncident(incidentId),
+    mutationFn: (input: { note?: string } = {}) => incidentApi.resolveIncident(incidentId, input),
     onSuccess: async (incident) => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: queryKeys.incidents.all }),

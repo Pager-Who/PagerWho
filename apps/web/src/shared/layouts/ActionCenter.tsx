@@ -25,6 +25,7 @@ import { incidentApi, notificationApi, workerApi, workspaceApi } from "../api/cl
 import { queryKeys } from "../api/queryKeys";
 import { Badge, Skeleton } from "../components";
 import { cn, formatRelativeTime, shortId } from "../utils";
+import { useIncidentAttentionSignals } from "./useIncidentAttentionSignals";
 
 type ActionCenterProps = {
   canViewOperations: boolean;
@@ -96,6 +97,11 @@ export function ActionCenter({ canViewOperations, projectId }: ActionCenterProps
   });
 
   const triggeredIncidents = incidentsQuery.data?.items ?? [];
+  const { desktopAlertPermission, requestDesktopAlertPermission } = useIncidentAttentionSignals({
+    hasMore: Boolean(incidentsQuery.data?.next_cursor),
+    incidents: incidentsQuery.data?.items,
+    projectId,
+  });
   const deadLetters = deadLettersQuery.data?.items ?? [];
   const stuckEscalations = stuckEscalationsQuery.data?.items ?? [];
   const pendingInvites = (invitesQuery.data ?? []).filter((invite) => invite.status === "pending");
@@ -199,6 +205,19 @@ export function ActionCenter({ canViewOperations, projectId }: ActionCenterProps
             </div>
             {isChecking ? <Loader2 className="animate-spin text-ink-subtle shrink-0" size={15} strokeWidth={2} /> : null}
           </header>
+
+          {desktopAlertPermission === "default" ? (
+            <div className="flex items-center justify-between gap-3 rounded-md border border-accent/20 bg-accent/5 p-2.5 text-xs leading-[1.4] text-ink-muted">
+              <span>Get a desktop alert when a new incident is triggered while Pager Who is in the background.</span>
+              <button
+                className="shrink-0 font-semibold text-accent underline underline-offset-2 hover:text-ink"
+                onClick={() => void requestDesktopAlertPermission()}
+                type="button"
+              >
+                Enable alerts
+              </button>
+            </div>
+          ) : null}
 
           <div className="grid gap-3 max-h-115 overflow-y-auto pr-1">
             {isChecking && !hasPanelItems ? <ActionCenterSkeleton /> : null}

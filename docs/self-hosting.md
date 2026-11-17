@@ -58,7 +58,7 @@ authentication and phone secrets.
 | `OIDC_REQUIRE_VERIFIED_EMAIL` | `true` |
 | `OIDC_CLIENT_AUTH_METHOD` | `client_secret_post`; `client_secret_basic` is supported |
 | `OIDC_POST_LOGIN_REDIRECT_URL` | `WEB_APP_URL`, then the local frontend fallback |
-| `WEBHOOK_PUBLIC_BASE_URL` | Local API URL; set the public API URL for generated webhook URLs |
+| `WEBHOOK_PUBLIC_BASE_URL` | Local API URL; set the public API URL for generated webhook and calendar feed URLs |
 
 ## Notifications
 
@@ -70,6 +70,12 @@ providers can fall back to log delivery.
 Configure project Email (SMTP) and Twilio providers through Project settings,
 then configure each responder's destinations and channel preferences in User
 settings. Verify phone numbers before enabling SMS or phone alerts.
+
+Acknowledge links in notifications are built by the worker from
+`WEB_APP_BASE_URL`; without it, notifications are sent without links. The
+phone keypad callback assumes the API is served under the web origin at
+`/api/v1`, as in the provided Compose stacks. The links are signed with a key
+derived from `PROVIDER_CREDENTIAL_ENCRYPTION_KEY`, so no extra secret is needed.
 
 Authentication SMTP is separate from project incident-notification SMTP. The
 API and worker must share `PROVIDER_CREDENTIAL_ENCRYPTION_KEY` when storing and

@@ -61,6 +61,28 @@ describe("Twilio providers", () => {
     });
   });
 
+  it("adds acknowledge links to SMS and a keypad acknowledge to calls when actions exist", async () => {
+    process.env.NOTIFICATION_DELIVERY_MODE = "live";
+    const messagesCreate = vi.fn().mockResolvedValue({ sid: "SM123" });
+    const callsCreate = vi.fn().mockResolvedValue({ sid: "CA123" });
+    const createClient = vi.fn(() => ({ messages: { create: messagesCreate }, calls: { create: callsCreate } }));
+    const message = createMessage({
+      actions: {
+        ackUrl: "https://pagerwho.test/ack/token123",
+        voiceAckUrl: "https://pagerwho.test/api/v1/incident-actions/voice/token123?a=1&b=2",
+      },
+    });
+
+    await new TwilioSmsProvider(createClient).send(message);
+    await new TwilioPhoneProvider(createClient).send(message);
+
+    expect(messagesCreate.mock.calls[0]?.[0].body).toContain("Ack: https://pagerwho.test/ack/token123");
+    const twiml = callsCreate.mock.calls[0]?.[0].twiml as string;
+    expect(twiml).toContain('<Gather numDigits="1"');
+    expect(twiml).toContain('action="https://pagerwho.test/api/v1/incident-actions/voice/token123?a=1&amp;b=2"');
+    expect(twiml).toContain("Press 1 to acknowledge.");
+  });
+
   it("does not fall back to server Twilio environment variables", async () => {
     process.env.NOTIFICATION_DELIVERY_MODE = "live";
     process.env.TWILIO_ACCOUNT_SID = "AC-server-fallback";

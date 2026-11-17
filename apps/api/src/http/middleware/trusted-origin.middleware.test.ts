@@ -103,6 +103,24 @@ describe("trustedOriginMiddleware", () => {
 
     expect(next).toHaveBeenCalledWith();
   });
+
+  it("allows the Twilio voice acknowledge callback but not the browser acknowledge endpoint without origin", () => {
+    process.env.CORS_ORIGIN = "https://app.example.com";
+    const voiceNext = vi.fn();
+    const browserNext = vi.fn();
+
+    trustedOriginMiddleware(createRequest({
+      method: "POST",
+      path: "/api/v1/incident-actions/voice/AbC_123-xyz",
+    }) as never, {} as never, voiceNext);
+    trustedOriginMiddleware(createRequest({
+      method: "POST",
+      path: "/api/v1/incident-actions/AbC_123-xyz/ack",
+    }) as never, {} as never, browserNext);
+
+    expect(voiceNext).toHaveBeenCalledWith();
+    expect(browserNext).toHaveBeenCalledWith(expect.objectContaining({ code: "missing_origin" }));
+  });
 });
 
 function createRequest(input: { method: string; origin?: string; path: string; referer?: string }) {

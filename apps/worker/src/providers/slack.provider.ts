@@ -104,19 +104,35 @@ function buildSlackBlocks(message: NotificationProviderMessage): Record<string, 
     },
   ];
 
+  const actionElements: Record<string, unknown>[] = [];
+
+  if (message.actions) {
+    actionElements.push({
+      type: "button",
+      style: "primary",
+      text: {
+        type: "plain_text",
+        text: "Acknowledge",
+      },
+      url: message.actions.ackUrl,
+    });
+  }
+
   if (message.incident.url) {
+    actionElements.push({
+      type: "button",
+      text: {
+        type: "plain_text",
+        text: "Open incident",
+      },
+      url: message.incident.url,
+    });
+  }
+
+  if (actionElements.length > 0) {
     blocks.push({
       type: "actions",
-      elements: [
-        {
-          type: "button",
-          text: {
-            type: "plain_text",
-            text: "Open incident",
-          },
-          url: message.incident.url,
-        },
-      ],
+      elements: actionElements,
     });
   }
 

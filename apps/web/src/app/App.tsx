@@ -1,32 +1,38 @@
 import { Navigate, Outlet, Route, Routes, useLocation } from "react-router-dom";
+import { lazy, Suspense } from "react";
 
-import { AdminPage } from "../features/admin/pages/AdminPage";
-import { AuthPage } from "../features/auth/pages/AuthPage";
-import { DocsPage } from "../features/docs/pages/DocsPage";
-import { EscalationPoliciesPage } from "../features/escalation-policies/pages/EscalationPoliciesPage";
-import { IncidentDetailPage } from "../features/incidents/pages/IncidentDetailPage";
-import { IncidentListPage } from "../features/incidents/pages/IncidentListPage";
 import { LandingPage } from "../features/landing/pages/LandingPage";
-import { LegalPage } from "../features/legal/pages/LegalPage";
-import { OnCallPage } from "../features/on-call/pages/OnCallPage";
-import { OperationsPage } from "../features/operations/pages/OperationsPage";
-import { OverviewPage } from "../features/overview/pages/OverviewPage";
-import { ProjectSetupPage } from "../features/projects/pages/ProjectSetupPage";
-import { ServiceDetailPage } from "../features/services/pages/ServiceDetailPage";
-import { ServiceListPage } from "../features/services/pages/ServiceListPage";
-import { ProjectSettingsPage } from "../features/settings/pages/ProjectSettingsPage";
-import { UserSettingsPage } from "../features/settings/pages/UserSettingsPage";
-import { WorkflowsPage } from "../features/workflows/pages/WorkflowsPage";
 import { useAuth } from "../shared/auth";
 import { LanguageSelect, useStaticText } from "../shared/i18n";
-import { AppLayout } from "../shared/layouts/AppLayout";
+
+// Route-level code splitting: only the landing page ships in the entry chunk.
+const AppLayout = lazy(() => import("../shared/layouts/AppLayout").then((module) => ({ default: module.AppLayout })));
+const AdminPage = lazy(() => import("../features/admin/pages/AdminPage").then((module) => ({ default: module.AdminPage })));
+const AuthPage = lazy(() => import("../features/auth/pages/AuthPage").then((module) => ({ default: module.AuthPage })));
+const DocsPage = lazy(() => import("../features/docs/pages/DocsPage").then((module) => ({ default: module.DocsPage })));
+const EscalationPoliciesPage = lazy(() => import("../features/escalation-policies/pages/EscalationPoliciesPage").then((module) => ({ default: module.EscalationPoliciesPage })));
+const IncidentAckPage = lazy(() => import("../features/incidents/pages/IncidentAckPage").then((module) => ({ default: module.IncidentAckPage })));
+const IncidentDetailPage = lazy(() => import("../features/incidents/pages/IncidentDetailPage").then((module) => ({ default: module.IncidentDetailPage })));
+const IncidentListPage = lazy(() => import("../features/incidents/pages/IncidentListPage").then((module) => ({ default: module.IncidentListPage })));
+const LegalPage = lazy(() => import("../features/legal/pages/LegalPage").then((module) => ({ default: module.LegalPage })));
+const OnCallPage = lazy(() => import("../features/on-call/pages/OnCallPage").then((module) => ({ default: module.OnCallPage })));
+const OperationsPage = lazy(() => import("../features/operations/pages/OperationsPage").then((module) => ({ default: module.OperationsPage })));
+const OverviewPage = lazy(() => import("../features/overview/pages/OverviewPage").then((module) => ({ default: module.OverviewPage })));
+const ProjectSetupPage = lazy(() => import("../features/projects/pages/ProjectSetupPage").then((module) => ({ default: module.ProjectSetupPage })));
+const ServiceDetailPage = lazy(() => import("../features/services/pages/ServiceDetailPage").then((module) => ({ default: module.ServiceDetailPage })));
+const ServiceListPage = lazy(() => import("../features/services/pages/ServiceListPage").then((module) => ({ default: module.ServiceListPage })));
+const ProjectSettingsPage = lazy(() => import("../features/settings/pages/ProjectSettingsPage").then((module) => ({ default: module.ProjectSettingsPage })));
+const UserSettingsPage = lazy(() => import("../features/settings/pages/UserSettingsPage").then((module) => ({ default: module.UserSettingsPage })));
+const WorkflowsPage = lazy(() => import("../features/workflows/pages/WorkflowsPage").then((module) => ({ default: module.WorkflowsPage })));
 
 export function App() {
   return (
     <>
+      <Suspense fallback={<RouteLoadingScreen />}>
       <Routes>
         <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<AuthPage />} />
+        <Route path="/ack/:token" element={<IncidentAckPage />} />
         <Route path="/docs" element={<DocsPage />} />
         <Route path="/docs/:slug" element={<DocsPage />} />
         <Route path="/privacy" element={<LegalPage document="privacy" />} />
@@ -55,6 +61,7 @@ export function App() {
         </Route>
         <Route path="*" element={<Navigate to="/overview" replace />} />
       </Routes>
+      </Suspense>
       <LanguageSelect variant="floating" />
     </>
   );
@@ -89,6 +96,10 @@ function RequireAdmin() {
   const { isPlatformAdmin } = useAuth();
 
   return isPlatformAdmin ? <Outlet /> : <Navigate to="/overview" replace />;
+}
+
+function RouteLoadingScreen() {
+  return <main aria-busy="true" className="min-h-screen bg-canvas" />;
 }
 
 function AuthLoadingScreen() {

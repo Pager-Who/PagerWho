@@ -101,5 +101,43 @@ describeIfDatabase("IncidentService workflow events", () => {
       title: "Checkout latency",
     });
   });
+
+  it("summarizes response times, priorities, services, and notification delivery for the window", async () => {
+    const fixture = await createTestServiceFixture();
+    fixtures.push(fixture);
+    const now = new Date("2026-11-17T12:00:00.000Z");
+    const minutesAgo = (minutes: number) => new Date(now.getTime() - minutes * 60_000);
+    const create = (title: string, priority: "P1" | "P3") => incidentService.createManualIncident({
+      priority, service_id: fixture.service, severity: "high", source: "manual", title,
+    });
+    const [fast, slow, open, outside] = await Promise.all([
+      create("Fast", "P1"), create("Slow", "P1"), create("Open", "P3"), create("Outside window", "P3"),
+    ]);
+    // Acknowledged after 2m / 6m, resolved after 10m / 30m; one still open; one created before the 7-day window.
+    await prisma.incident.update({ where: { id: fast.id }, data: { status: "resolved", createdAt: minutesAgo(60), acknowledgedAt: minutesAgo(58), resolvedAt: minutesAgo(50) } });
+    await prisma.incident.update({ where: { id: slow.id }, data: { status: "resolved", createdAt: minutesAgo(60), acknowledgedAt: minutesAgo(54), resolvedAt: minutesAgo(30) } });
+    await prisma.incident.update({ where: { id: open.id }, data: { createdAt: minutesAgo(5) } });
+    await prisma.incident.update({ where: { id: outside.id }, data: { createdAt: minutesAgo(8 * 24 * 60) } });
+    await prisma.notificationLog.createMany({
+      data: (["sent", "failed", "skipped"] as const).map((status) => ({
+        incidentId: fast.id, channel: "email" as const, status, targetType: "user" as const, targetId: randomUUID(),
+        targetAddress: "responder@example.com", idempotencyKey: `${fast.id}:metrics:${status}`, createdAt: minutesAgo(59),
+      })),
+    });
+
+    const metrics = await incidentService.getIncidentMetrics(fixture.workspace, 7, now);
+
+    expect(metrics).toMatchObject({
+      incident_count: 3,
+      acknowledged_count: 2,
+      resolved_count: 2,
+      time_to_acknowledge: { average_seconds: 240, median_seconds: 240 },
+      time_to_resolve: { average_seconds: 1200, median_seconds: 1200 },
+      by_priority: [{ priority: "P1", incident_count: 2 }, { priority: "P3", incident_count: 1 }],
+      by_service: [{ service_id: fixture.service, incident_count: 3, open_count: 1, median_resolve_seconds: 1200 }],
+      // Skipped deliveries are excluded from the total.
+      notifications: { total: 2, delivered: 1, failed: 1 },
+    });
+  });
 });
 

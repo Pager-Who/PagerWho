@@ -1,5 +1,8 @@
 import type {
+  CalendarFeedStatus,
   CreateOnCallOverrideRequest,
+  MyOnCallShiftsQuery,
+  OnCallShift,
   CreateOnCallScheduleRequest,
   CurrentOnCall,
   CurrentOnCallQuery,
@@ -18,6 +21,18 @@ export function createOnCallApi(client: ApiClient) {
       const filters = typeof query === "string" ? { service_id: query } : query;
 
       return client.request<CurrentOnCall>(`/on-call${buildQueryString(filters)}`);
+    },
+    listMyOnCallShifts(query: Partial<MyOnCallShiftsQuery> = {}) {
+      return client.request<OnCallShift[]>(`/on-call/my-shifts${buildQueryString(query)}`);
+    },
+    getCalendarFeed() {
+      return client.request<CalendarFeedStatus>("/me/calendar-feed");
+    },
+    rotateCalendarFeed() {
+      return client.request<CalendarFeedStatus>("/me/calendar-feed", { method: "POST" });
+    },
+    disableCalendarFeed() {
+      return client.request<CalendarFeedStatus>("/me/calendar-feed", { method: "DELETE" });
     },
     listOnCallSchedules(filters: { workspace_id?: string } = {}) {
       return client.request<OnCallSchedule[]>(`/on-call/schedules${buildQueryString(filters)}`);

@@ -83,6 +83,7 @@ test("incidents stays usable on a mobile viewport", async ({ page }) => {
   await page.getByRole("button", { name: "Acknowledge" }).click();
   await expect(page.getByText("acknowledged", { exact: true }).first()).toBeVisible();
   await page.getByRole("button", { name: "Resolve" }).click();
+  await page.getByRole("button", { name: "Resolve incident" }).click();
   await expect(page.getByText("resolved", { exact: true }).first()).toBeVisible();
 
   const hasHorizontalOverflow = await page.evaluate(
@@ -223,6 +224,7 @@ test("overview response actions stay usable on a mobile viewport", async ({ page
   await page.getByRole("button", { name: "Acknowledge" }).click();
   await expect(page.getByText("acknowledged", { exact: true }).first()).toBeVisible();
   await page.getByRole("button", { name: "Resolve" }).click();
+  await page.getByRole("button", { name: "Resolve incident" }).click();
   await expect(page.getByText("resolved", { exact: true }).first()).toBeVisible();
 
   await page.goto("/overview");

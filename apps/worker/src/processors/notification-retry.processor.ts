@@ -1,9 +1,14 @@
 import type { NotificationLog } from "@im/contracts";
-import { decryptProviderCredential, NotificationService } from "@im/backend-core";
+import { createIncidentActionToken, decryptProviderCredential, NotificationService } from "@im/backend-core";
 import { prisma, type PrismaClient } from "@im/db";
 
 import { EmailProvider } from "../providers/email.provider";
-import { NotificationProviderError, type NotificationProvider, type NotificationProviderSettings } from "../providers/notification-provider";
+import {
+  NotificationProviderError,
+  type NotificationProvider,
+  type NotificationProviderSettings,
+  type NotificationResponseActions,
+} from "../providers/notification-provider";
 import { SlackProvider } from "../providers/slack.provider";
 import { TwilioPhoneProvider, TwilioSmsProvider } from "../providers/twilio.provider";
 import { WebhookProvider } from "../providers/webhook.provider";
@@ -104,11 +109,12 @@ export class NotificationRetryProcessor {
       }
 
       const incidentUrl = buildIncidentUrl(incident.id);
+      const actions = buildResponseActions(notification, incident);
 
       const result = await provider.send({
         targetAddress: notification.target_address,
         subject: buildNotificationSubject(notification.event_action, incident),
-        body: buildNotificationBody(notification, incident),
+        body: buildNotificationBody(notification, incident, actions),
         incident: {
           id: incident.id,
           title: incident.title,
@@ -131,6 +137,7 @@ export class NotificationRetryProcessor {
           attempt: notification.attempt,
           eventAction: notification.event_action,
         },
+        ...(actions ? { actions } : {}),
         providerSettings,
       });
 
@@ -245,9 +252,12 @@ function buildNotificationSubject(eventAction: string, incident: IncidentNotific
 function buildNotificationBody(
   notification: NotificationLog,
   incident: IncidentNotificationContext,
+  actions: NotificationResponseActions | null,
 ): string {
   const incidentUrl = buildIncidentUrl(incident.id);
   const lines = [
+    actions ? `Acknowledge: ${actions.ackUrl}` : null,
+    actions ? "" : null,
     `Event: ${notification.event_action}`,
     `Incident: ${incident.title}`,
     `Service: ${incident.service.name}`,
@@ -268,13 +278,49 @@ function buildNotificationBody(
 }
 
 function buildIncidentUrl(incidentId: string): string | null {
-  const baseUrl = process.env.WEB_APP_BASE_URL ?? process.env.APP_BASE_URL;
+  const baseUrl = readWebAppBaseUrl();
 
   if (!baseUrl) {
     return null;
   }
 
-  return `${baseUrl.replace(/\/+$/, "")}/incidents/${incidentId}`;
+  return `${baseUrl}/incidents/${incidentId}`;
+}
+
+const responderTargetTypes = new Set(["primary_on_call", "secondary_on_call", "user", "team"]);
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// Only a page to a specific responder about a still-triggered incident gets an acknowledge link;
+// channel and webhook targets have no single user the acknowledgement could be attributed to.
+export function buildResponseActions(
+  notification: Pick<NotificationLog, "event_action" | "target_id" | "target_type">,
+  incident: Pick<IncidentNotificationContext, "id" | "status">,
+): NotificationResponseActions | null {
+  const baseUrl = readWebAppBaseUrl();
+
+  if (
+    !baseUrl
+    || notification.event_action !== "incident.created"
+    || incident.status !== "triggered"
+    || !responderTargetTypes.has(notification.target_type)
+    || !notification.target_id
+    || !uuidPattern.test(notification.target_id)
+  ) {
+    return null;
+  }
+
+  const token = createIncidentActionToken({ incidentId: incident.id, userId: notification.target_id });
+
+  return {
+    ackUrl: `${baseUrl}/ack/${token}`,
+    // ponytail: assumes the API is served under the web origin at /api/v1 (true for dev/prod nginx); add an API base URL env if that changes.
+    voiceAckUrl: `${baseUrl}/api/v1/incident-actions/voice/${token}`,
+  };
+}
+
+function readWebAppBaseUrl(): string | null {
+  const baseUrl = process.env.WEB_APP_BASE_URL ?? process.env.APP_BASE_URL;
+  return baseUrl ? baseUrl.replace(/\/+$/, "") : null;
 }
 
 function providerNameForChannel(channel: NotificationLog["channel"]): string {

@@ -8,7 +8,7 @@ import type {
   Service,
   WorkspaceRoleKey,
 } from "@im/contracts";
-import { AlertCircle, CheckCircle, Circle, Clock } from "lucide-react";
+import { AlertCircle, CheckCircle, Circle, Clock, Search } from "lucide-react";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
@@ -30,15 +30,17 @@ import {
   TextInput,
   type DataTableColumn,
 } from "../../../shared/components";
+import { moveListFocus, useKeyboardShortcuts } from "../../../shared/hooks/useKeyboardShortcuts";
 import { cn, formatDateTime, formatRelativeTime, shortId } from "../../../shared/utils";
 import { hasWorkspacePermission, useAuth } from "../../../shared/auth";
 import {
   useCreateIncidentMutation,
+  useIncidentCounts,
   useIncidentList,
   useIncidentServiceOptions,
   useIncidentWorkspaceRoles,
 } from "../queries";
-import { LocalizedText } from "../../../shared/i18n";
+import { LocalizedText, useStaticText } from "../../../shared/i18n";
 
 const incidentStatuses = ["triggered", "acknowledged", "resolved"] as const satisfies readonly IncidentStatus[];
 const incidentSeverities = ["critical", "high", "medium", "low"] as const satisfies readonly IncidentSeverity[];
@@ -78,19 +80,31 @@ const signalToneBorder: Record<string, string> = {
 export function IncidentListPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { isPlatformAdmin } = useAuth();
+  const t = useStaticText();
+  const { isPlatformAdmin, userId } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const initialCreateServiceId = getInitialCreateServiceId(location.state);
   const [isCreatePanelOpen, setIsCreatePanelOpen] = useState(Boolean(initialCreateServiceId));
   const [pageCursors, setPageCursors] = useState<string[]>([]);
   const createPanelRef = useRef<HTMLElement>(null);
+  const searchFormRef = useRef<HTMLFormElement>(null);
+  const incidentListRef = useRef<HTMLDivElement>(null);
   const [createForm, setCreateForm] = useState<CreateIncidentFormState>(() => ({
     ...defaultCreateFormState,
     serviceId: initialCreateServiceId ?? "",
   }));
 
   const filters = useMemo(() => readIncidentFilters(searchParams), [searchParams]);
+  const countFilters = useMemo(() => ({
+    ...(filters.service_id ? { service_id: filters.service_id } : {}),
+    ...(filters.priority ? { priority: filters.priority } : {}),
+    ...(filters.severity ? { severity: filters.severity } : {}),
+    ...(filters.acknowledged_by ? { acknowledged_by: filters.acknowledged_by } : {}),
+    ...(filters.q ? { q: filters.q } : {}),
+  }), [filters]);
+  const [searchDraft, setSearchDraft] = useState(filters.q ?? "");
   const incidentsQuery = useIncidentList(filters);
+  const countsQuery = useIncidentCounts(countFilters);
   const servicesQuery = useIncidentServiceOptions();
   const workspaceRolesQuery = useIncidentWorkspaceRoles();
   const createIncidentMutation = useCreateIncidentMutation();
@@ -99,8 +113,16 @@ export function IncidentListPage() {
   const services = servicesQuery.data?.items ?? [];
   const incidents = incidentsQuery.data?.items ?? [];
   const serviceNameById = useMemo(() => createServiceNameMap(services), [services]);
-  const summary = useMemo(() => createIncidentSummary(incidents), [incidents]);
-  const visibleIncidents = useMemo(() => sortIncidentsForResponse(incidents), [incidents]);
+  const counts = countsQuery.data;
+  const summary = {
+    acknowledged: counts?.acknowledged ?? 0,
+    critical: counts?.critical_open ?? 0,
+    open: (counts?.triggered ?? 0) + (counts?.acknowledged ?? 0),
+    resolved: counts?.resolved ?? 0,
+    triggered: counts?.triggered ?? 0,
+  };
+  // The API already orders open queues by priority, then triggered before acknowledged, then newest.
+  const visibleIncidents = incidents;
 
   const columns = useMemo<Array<DataTableColumn<Incident>>>(
     () => [
@@ -153,7 +175,10 @@ export function IncidentListPage() {
     [serviceNameById],
   );
 
-  const hasActiveFilters = Boolean(filters.service_id || filters.priority || filters.severity || (filters.status && filters.status !== "open"));
+  const hasActiveFilters = Boolean(
+    filters.service_id || filters.priority || filters.severity || filters.q || filters.acknowledged_by
+    || (filters.status && filters.status !== "open"),
+  );
   const canUseResponseActions = isPlatformAdmin || canUseIncidentResponseActions(workspaceRoles);
   const canCreateIncident = (isPlatformAdmin || hasWorkspacePermission(workspaceRoles, "incident.create"))
     && services.length > 0
@@ -176,6 +201,10 @@ export function IncidentListPage() {
   }, [location.state]);
 
   useEffect(() => {
+    setSearchDraft(filters.q ?? "");
+  }, [filters.q]);
+
+  useEffect(() => {
     if (!isCreatePanelOpen) return;
     const frame = requestAnimationFrame(() => {
       createPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -184,6 +213,12 @@ export function IncidentListPage() {
     return () => cancelAnimationFrame(frame);
   }, [isCreatePanelOpen]);
 
+  useKeyboardShortcuts({
+    "/": () => searchFormRef.current?.querySelector("input")?.focus(),
+    j: () => moveListFocus(incidentListRef.current, "tbody tr[tabindex='0'], [data-incident-card]", 1),
+    k: () => moveListFocus(incidentListRef.current, "tbody tr[tabindex='0'], [data-incident-card]", -1),
+  });
+
   function updateFilter(key: FilterKey, value: string) {
     const nextParams = new URLSearchParams(searchParams);
     if (value) nextParams.set(key, value);
@@ -191,6 +226,11 @@ export function IncidentListPage() {
     nextParams.delete("cursor");
     setPageCursors([]);
     setSearchParams(nextParams, { replace: true });
+  }
+
+  function submitSearch(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    updateFilter("q", searchDraft.trim());
   }
 
   function clearFilters() {
@@ -255,9 +295,9 @@ export function IncidentListPage() {
         <QueueSignal label="Open" tone="red" value={summary.open} />
         <QueueSignal label="Triggered" tone="red" value={summary.triggered} />
         <QueueSignal label="Acknowledged" tone="blue" value={summary.acknowledged} />
-        <QueueSignal label="Critical" tone="yellow" value={summary.critical} />
+        <QueueSignal label="Critical open" tone="yellow" value={summary.critical} />
       </section>
-      <p className="m-0 text-xs text-ink-muted">Counts reflect the current page and filters. Use status filters to view other incidents.</p>
+      <p className="m-0 text-xs text-ink-muted">Counts cover every incident that matches the current filters.</p>
 
       <div
         className={cn(
@@ -272,32 +312,55 @@ export function IncidentListPage() {
             <div aria-label="Incident status filters" className="grid gap-2 grid-cols-2 md:grid-cols-4">
               <StatusFilterButton
                 active={filters.status === "open"}
-                count={filters.status === "open" ? summary.open : undefined}
+                count={counts ? summary.open : undefined}
                 icon={<Circle size={13} />}
                 label="Open"
                 onClick={() => updateFilter("status", "")}
               />
               <StatusFilterButton
                 active={filters.status === "triggered"}
-                count={filters.status === "triggered" ? summary.triggered : undefined}
+                count={counts ? summary.triggered : undefined}
                 icon={<AlertCircle size={13} />}
                 label="Triggered"
                 onClick={() => updateFilter("status", "triggered")}
               />
               <StatusFilterButton
                 active={filters.status === "acknowledged"}
-                count={filters.status === "acknowledged" ? summary.acknowledged : undefined}
+                count={counts ? summary.acknowledged : undefined}
                 icon={<Clock size={13} />}
                 label="Acknowledged"
                 onClick={() => updateFilter("status", "acknowledged")}
               />
               <StatusFilterButton
                 active={filters.status === "resolved"}
-                count={filters.status === "resolved" ? summary.resolved : undefined}
+                count={counts ? summary.resolved : undefined}
                 icon={<CheckCircle size={13} />}
                 label="Resolved"
                 onClick={() => updateFilter("status", "resolved")}
               />
+            </div>
+            <div className="flex flex-wrap items-end gap-3">
+              <form className="flex min-w-0 flex-1 basis-64 items-end gap-2" onSubmit={submitSearch} ref={searchFormRef} role="search">
+                <div className="min-w-0 flex-1">
+                  <Field label={t("Search incidents")}>
+                    <TextInput
+                      aria-keyshortcuts="/"
+                      onChange={(event) => setSearchDraft(event.target.value)}
+                      placeholder={t("Search by title")}
+                      type="search"
+                      value={searchDraft}
+                    />
+                  </Field>
+                </div>
+                <Button aria-label={t("Search")} size="sm" type="submit" variant="secondary"><Search size={14} /></Button>
+              </form>
+              {userId ? (
+                <FilterChip
+                  active={filters.acknowledged_by === userId}
+                  label={t("Assigned to me")}
+                  onClick={() => updateFilter("acknowledged_by", filters.acknowledged_by === userId ? "" : userId)}
+                />
+              ) : null}
             </div>
             <div className="grid items-end gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(220px,0.8fr)_auto]">
               <FilterChipGroup label="Priority">
@@ -343,12 +406,15 @@ export function IncidentListPage() {
             <p className="m-0 text-ink-subtle text-xs leading-[1.4]">
               Open incidents are shown by default and sorted by response urgency. Use filters to narrow the queue without losing the current context.
             </p>
+            <p className="m-0 hidden text-ink-subtle text-xs leading-[1.4] sm:block">
+              Keyboard: / to search, j and k to move between incidents, Enter to open, a to acknowledge on an incident.
+            </p>
           </div>
 
           {incidentsQuery.isLoading || servicesQuery.isLoading ? <TablePageSkeleton label="Loading incidents" /> : null}
           {incidentsQuery.error ? <ErrorState error={incidentsQuery.error} onRetry={() => Promise.all([incidentsQuery.refetch(), servicesQuery.refetch()])} title="Could not load incidents" /> : null}
           {!incidentsQuery.isLoading && !incidentsQuery.error ? (
-            <div className="grid gap-2">
+            <div className="grid gap-2" ref={incidentListRef}>
             <div className="flex items-center justify-between gap-3 px-1">
                 <span className="text-ink-muted text-xs min-h-4 inline-flex items-center">
                 {incidentsQuery.isLoading ? <Skeleton className="h-3 w-36" /> : <>Page {pageCursors.length + 1} · {visibleIncidents.length} {visibleIncidents.length === 1 ? "incident" : "incidents"} shown</>}
@@ -388,6 +454,7 @@ export function IncidentListPage() {
               ) : visibleIncidents.map((incident) => (
                 <button
                   className="grid min-w-0 gap-2 rounded-xl border border-hairline bg-surface-2 p-3 text-left hover:border-accent/50"
+                  data-incident-card
                   key={incident.id}
                   onClick={() => navigate(`/incidents/${incident.id}`)}
                   type="button"
@@ -516,6 +583,8 @@ function readIncidentFilters(searchParams: URLSearchParams): Partial<IncidentFil
   const priority = searchParams.get("priority");
   const severity = searchParams.get("severity");
   const serviceId = searchParams.get("service_id");
+  const q = searchParams.get("q")?.trim();
+  const acknowledgedBy = searchParams.get("acknowledged_by");
 
   return {
     limit: 100,
@@ -524,6 +593,8 @@ function readIncidentFilters(searchParams: URLSearchParams): Partial<IncidentFil
     ...(isIncidentPriority(priority) ? { priority } : {}),
     ...(isIncidentSeverity(severity) ? { severity } : {}),
     ...(serviceId ? { service_id: serviceId } : {}),
+    ...(q ? { q: q.slice(0, 200) } : {}),
+    ...(acknowledgedBy ? { acknowledged_by: acknowledgedBy } : {}),
   };
 }
 
@@ -551,39 +622,6 @@ function canUseIncidentResponseActions(roles: readonly WorkspaceRoleKey[]) {
 
 function createServiceNameMap(services: Service[]) {
   return new Map(services.map((service) => [service.id, service.name]));
-}
-
-function createIncidentSummary(incidents: Incident[]) {
-  const triggered = incidents.filter((incident) => incident.status === "triggered").length;
-  const acknowledged = incidents.filter((incident) => incident.status === "acknowledged").length;
-  const resolved = incidents.filter((incident) => incident.status === "resolved").length;
-
-  return {
-    acknowledged,
-    critical: incidents.filter((incident) => incident.severity === "critical").length,
-    open: triggered + acknowledged,
-    resolved,
-    total: incidents.length,
-    triggered,
-  };
-}
-
-function sortIncidentsForResponse(incidents: Incident[]) {
-  return [...incidents].sort((a, b) => {
-    const priorityDiff = Number(a.priority.slice(1)) - Number(b.priority.slice(1));
-    if (priorityDiff !== 0) return priorityDiff;
-
-    const statusDiff = incidentStatusWeight(b.status) - incidentStatusWeight(a.status);
-    if (statusDiff !== 0) return statusDiff;
-
-    return Date.parse(b.updated_at) - Date.parse(a.updated_at);
-  });
-}
-
-function incidentStatusWeight(status: IncidentStatus) {
-  if (status === "triggered") return 2;
-  if (status === "acknowledged") return 1;
-  return 0;
 }
 
 function QueueSignal({

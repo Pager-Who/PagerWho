@@ -1,6 +1,14 @@
 import type {
+  CreateIncidentNoteRequest,
   CreateIncidentRequest,
   Incident,
+  IncidentActionLink,
+  IncidentCounts,
+  IncidentCountsQuery,
+  IncidentMetrics,
+  IncidentMetricsQuery,
+  IncidentTimelineEntry,
+  ReassignIncidentRequest,
   IncidentDetail,
   IncidentSummary,
   IncidentSummaryRequest,
@@ -44,9 +52,36 @@ export function createIncidentApi(client: ApiClient) {
         method: "POST",
       });
     },
-    resolveIncident(incidentId: string) {
+    getIncidentActionLink(token: string) {
+      return client.request<IncidentActionLink>(`/incident-actions/${encodeURIComponent(token)}`);
+    },
+    acknowledgeIncidentActionLink(token: string) {
+      return client.request<IncidentActionLink>(`/incident-actions/${encodeURIComponent(token)}/ack`, {
+        method: "POST",
+      });
+    },
+    resolveIncident(incidentId: string, input: { note?: string } = {}) {
       return client.request<Incident>(`/incidents/${incidentId}/resolve`, {
         method: "POST",
+        ...(input.note ? { body: JSON.stringify({ note: input.note }) } : {}),
+      });
+    },
+    countIncidents(filters: IncidentCountsQuery = {}) {
+      return client.request<IncidentCounts>(`/incidents/counts${buildQueryString(filters)}`);
+    },
+    getIncidentMetrics(query: IncidentMetricsQuery) {
+      return client.request<IncidentMetrics>(`/incidents/metrics${buildQueryString(query)}`);
+    },
+    addIncidentNote(incidentId: string, input: CreateIncidentNoteRequest) {
+      return client.request<IncidentTimelineEntry>(`/incidents/${incidentId}/notes`, {
+        method: "POST",
+        body: JSON.stringify(input),
+      });
+    },
+    reassignIncident(incidentId: string, input: ReassignIncidentRequest) {
+      return client.request<Incident>(`/incidents/${incidentId}/reassign`, {
+        method: "POST",
+        body: JSON.stringify(input),
       });
     },
     updateIncidentPriority(incidentId: string, input: UpdateIncidentPriorityRequest) {

@@ -71,6 +71,27 @@ export const CurrentOnCallQuerySchema = z.object({
   at: DateTimeSchema.optional(),
 });
 
+export const OnCallShiftSchema = z.object({
+  schedule_id: UuidSchema,
+  schedule_name: z.string(),
+  workspace_id: UuidSchema,
+  timezone: z.string(),
+  layer: OnCallLayerSchema,
+  starts_at: DateTimeSchema,
+  ends_at: DateTimeSchema,
+});
+
+export const MyOnCallShiftsQuerySchema = z.object({
+  workspace_id: UuidSchema.optional(),
+  days: z.coerce.number().int().min(1).max(31).default(14),
+});
+
+export const CalendarFeedStatusSchema = z.object({
+  enabled: z.boolean(),
+  // Only returned right after the feed is (re)created; the raw token is never stored.
+  url: z.string().url().nullable(),
+});
+
 export const OnCallSchedulePreviewQuerySchema = z.object({
   starts_at: DateTimeSchema.optional(),
   ends_at: DateTimeSchema.optional(),
@@ -159,3 +180,6 @@ export type UpsertOnCallRotationRequest = z.infer<typeof UpsertOnCallRotationReq
 export type CreateOnCallScheduleRequest = z.infer<typeof CreateOnCallScheduleRequestSchema>;
 export type UpdateOnCallScheduleRequest = z.infer<typeof UpdateOnCallScheduleRequestSchema>;
 export type CreateOnCallOverrideRequest = z.infer<typeof CreateOnCallOverrideRequestSchema>;
+export type OnCallShift = z.infer<typeof OnCallShiftSchema>;
+export type MyOnCallShiftsQuery = z.infer<typeof MyOnCallShiftsQuerySchema>;
+export type CalendarFeedStatus = z.infer<typeof CalendarFeedStatusSchema>;

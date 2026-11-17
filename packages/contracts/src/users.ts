@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { DateTimeSchema, UuidSchema } from "./common";
+import { IncidentPrioritySchema } from "./enums";
 
 const UserConfigurableNotificationChannelSchema = z.enum(["email", "sms", "phone"]);
 
@@ -28,6 +29,7 @@ export const UserSchema = z.object({
       channel: UserConfigurableNotificationChannelSchema,
       enabled: z.boolean(),
       delay_seconds: z.number().int().min(0),
+      max_priority: IncidentPrioritySchema.nullable().optional(),
     })),
   }),
   created_at: DateTimeSchema,
@@ -38,6 +40,8 @@ export const UserNotificationChannelPreferenceSchema = z.object({
   channel: UserConfigurableNotificationChannelSchema,
   enabled: z.boolean(),
   delay_seconds: z.number().int().min(0),
+  // Pages only for incidents at or above this priority (P2 = P1 and P2); null or omitted = every priority.
+  max_priority: IncidentPrioritySchema.nullable().optional(),
 });
 
 export const UserNotificationPreferencesSchema = z.object({

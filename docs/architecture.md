@@ -92,6 +92,31 @@ before sending. An external request already in flight cannot be recalled; a
 successful send completed after acknowledgement or resolution is recorded as
 sent_after_ack.
 
+## Responder workflows
+
+Responders can add notes to an incident, leave an optional note when resolving,
+and hand an acknowledged incident to another member with incident.respond.
+Notes and handoffs are recorded on the timeline (incident.note and
+incident.reassigned). The incident list supports title search, an "assigned to
+me" filter, and server-side status counts and open-queue ordering, so counts and
+order stay consistent across pages.
+
+Notifications sent to an individual responder for a newly triggered incident
+carry a signed acknowledge link. The token holds the incident, user, and a
+24-hour expiry, signed with a key derived from
+PROVIDER_CREDENTIAL_ENCRYPTION_KEY. Email and Slack show an Acknowledge button,
+SMS includes a link to the /ack/:token page, and phone calls ask the responder
+to press 1. Opening the page never acknowledges by itself; the responder must
+press the button. Every use re-checks the incident.respond permission and
+suspension state, and acknowledging is idempotent until the token expires.
+
+Each notification channel preference can set a max_priority so lower-priority
+incidents skip that channel. Users can view their upcoming on-call shifts and
+subscribe to a personal ICS feed. Only a SHA-256 hash of the feed token is
+stored, so the URL is shown once when it is created. The Overview page shows
+response metrics (time to acknowledge and resolve, counts by priority and
+service, notification delivery rate) for the last 7, 30, or 90 days.
+
 ## Background processing and delivery
 
 The worker polls due PostgreSQL state, uses claims and leases for notification
@@ -136,10 +161,12 @@ Trust-boundary validation and permission checks are server responsibilities.
 ## REST surface
 
 Application routes live under /api/v1. Route families include auth, me,
-workspaces, users, teams, services, incidents, webhooks, on-call,
-escalation-policies, notifications, activity-logs, audit-logs, workers,
-workflows, workflow-runs, and platform. Shared contracts are the source
-for request and response types. Interactive API documentation is served at
+workspaces, users, teams, services, incidents, incident-actions, webhooks,
+on-call, calendar-feeds, escalation-policies, notifications, activity-logs,
+audit-logs, workers, workflows, workflow-runs, and platform. Shared contracts
+are the source for request and response types. incident-actions (signed
+acknowledge links and the Twilio keypad callback) and calendar-feeds (ICS
+subscriptions) need no session; the token in the path is the credential. Interactive API documentation is served at
 /api-docs and /openapi.json; the API health endpoint is /health.
 
 ## Verification

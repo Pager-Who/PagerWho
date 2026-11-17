@@ -1,7 +1,9 @@
 import type {
   CreateIncidentRequest,
   Incident,
+  IncidentCounts,
   IncidentDetail,
+  IncidentMetrics,
   IncidentEscalationState,
   IncidentFilter,
   IncidentNotificationsQuery,
@@ -16,6 +18,24 @@ import type { PrismaClient, TransactionClient } from "@im/db";
 
 import { recordActivityLog } from "../activity";
 import { IncidentError } from "./incident.errors";
+
+type IncidentMetricsSummaryRow = {
+  incident_count: number;
+  acknowledged_count: number;
+  resolved_count: number;
+  ack_average: number | null;
+  ack_median: number | null;
+  resolve_average: number | null;
+  resolve_median: number | null;
+};
+
+type IncidentMetricsServiceRow = {
+  service_id: string;
+  service_name: string;
+  incident_count: number;
+  open_count: number;
+  median_resolve: number | null;
+};
 
 type IncidentRecord = {
   id: string;
@@ -105,20 +125,14 @@ export class IncidentService {
     const limit = filters.limit ?? 25;
     const incidents = await this.db.incident.findMany({
       where: {
-        ...(filters.workspace_id
-          ? { workspaceId: filters.workspace_id }
-          : filters.workspaceIds
-            ? { workspaceId: { in: filters.workspaceIds } }
-            : {}),
-        ...(filters.service_id ? { serviceId: filters.service_id } : {}),
-        ...(filters.severity ? { severity: filters.severity } : {}),
-        ...(filters.priority ? { priority: filters.priority } : {}),
+        ...this.buildIncidentScopeWhere(filters),
         ...(filters.status === "open"
           ? { status: { in: ["triggered", "acknowledged"] as const } }
           : filters.status ? { status: filters.status } : {}),
       },
-      orderBy: filters.status === "open"
-        ? [{ priority: "asc" }, { createdAt: "desc" }, { id: "desc" }]
+      // Unresolved queues sort by response urgency across pages; history views stay newest first.
+      orderBy: filters.status && filters.status !== "resolved"
+        ? [{ priority: "asc" }, { status: "asc" }, { createdAt: "desc" }, { id: "desc" }]
         : [{ createdAt: "desc" }, { id: "desc" }],
       ...(filters.cursor
         ? {
@@ -144,6 +158,209 @@ export class IncidentService {
     filters: Omit<IncidentListFilters, "service_id"> = {},
   ): Promise<PaginatedResponse<Incident>> {
     return this.listIncidents({ ...filters, service_id: serviceId });
+  }
+
+  // Queue totals for the same filters as the list (ignoring status and paging), so summary cards are not page-bound.
+  async countIncidents(filters: IncidentListFilters = {}): Promise<IncidentCounts> {
+    const where = this.buildIncidentScopeWhere(filters);
+    const [byStatus, criticalOpen] = await Promise.all([
+      this.db.incident.groupBy({ by: ["status"], where, _count: { _all: true } }),
+      this.db.incident.count({
+        where: {
+          ...where,
+          status: { in: ["triggered", "acknowledged"] },
+          OR: [{ priority: "P1" }, { severity: "critical" }],
+        },
+      }),
+    ]);
+    const countFor = (status: string) => byStatus.find((row) => row.status === status)?._count._all ?? 0;
+
+    return {
+      triggered: countFor("triggered"),
+      acknowledged: countFor("acknowledged"),
+      resolved: countFor("resolved"),
+      critical_open: criticalOpen,
+    };
+  }
+
+  // Response metrics for incidents created in the last `days`. Durations are measured from creation, so they include
+  // escalation wait time, which is what the responder experiences.
+  async getIncidentMetrics(workspaceId: string, days: number, now: Date = new Date()): Promise<IncidentMetrics> {
+    const since = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+    const [summaryRows, byPriority, serviceRows, notificationRows] = await Promise.all([
+      this.db.$queryRaw<IncidentMetricsSummaryRow[]>`
+        SELECT
+          count(*)::int AS incident_count,
+          count(acknowledged_at)::int AS acknowledged_count,
+          count(resolved_at)::int AS resolved_count,
+          avg(extract(epoch FROM acknowledged_at - created_at))::float8 AS ack_average,
+          percentile_cont(0.5) WITHIN GROUP (ORDER BY extract(epoch FROM acknowledged_at - created_at))::float8 AS ack_median,
+          avg(extract(epoch FROM resolved_at - created_at))::float8 AS resolve_average,
+          percentile_cont(0.5) WITHIN GROUP (ORDER BY extract(epoch FROM resolved_at - created_at))::float8 AS resolve_median
+        FROM incidents
+        WHERE workspace_id = ${workspaceId}::uuid AND created_at >= ${since}
+      `,
+      this.db.incident.groupBy({
+        by: ["priority"],
+        where: { workspaceId, createdAt: { gte: since } },
+        _count: { _all: true },
+      }),
+      this.db.$queryRaw<IncidentMetricsServiceRow[]>`
+        SELECT
+          i.service_id::text AS service_id,
+          s.name AS service_name,
+          count(*)::int AS incident_count,
+          count(*) FILTER (WHERE i.status <> 'resolved')::int AS open_count,
+          percentile_cont(0.5) WITHIN GROUP (ORDER BY extract(epoch FROM i.resolved_at - i.created_at))::float8 AS median_resolve
+        FROM incidents i
+        JOIN services s ON s.id = i.service_id
+        WHERE i.workspace_id = ${workspaceId}::uuid AND i.created_at >= ${since}
+        GROUP BY i.service_id, s.name
+        ORDER BY incident_count DESC, s.name ASC
+        LIMIT 10
+      `,
+      this.db.notificationLog.groupBy({
+        by: ["status"],
+        where: { createdAt: { gte: since }, incident: { workspaceId } },
+        _count: { _all: true },
+      }),
+    ]);
+    const summary = summaryRows[0];
+    const notificationCount = (statuses: string[]) => notificationRows
+      .filter((row) => statuses.includes(row.status))
+      .reduce((total, row) => total + row._count._all, 0);
+    const roundSeconds = (value: number | null | undefined) => (value === null || value === undefined ? null : Math.round(value));
+
+    return {
+      window_days: days,
+      since: since.toISOString(),
+      incident_count: summary?.incident_count ?? 0,
+      acknowledged_count: summary?.acknowledged_count ?? 0,
+      resolved_count: summary?.resolved_count ?? 0,
+      time_to_acknowledge: {
+        average_seconds: roundSeconds(summary?.ack_average),
+        median_seconds: roundSeconds(summary?.ack_median),
+      },
+      time_to_resolve: {
+        average_seconds: roundSeconds(summary?.resolve_average),
+        median_seconds: roundSeconds(summary?.resolve_median),
+      },
+      by_priority: [...byPriority].sort((left, right) => left.priority.localeCompare(right.priority)).map((row) => ({
+        priority: row.priority as IncidentPriority,
+        incident_count: row._count._all,
+      })),
+      by_service: serviceRows.map((row) => ({
+        service_id: row.service_id,
+        service_name: row.service_name,
+        incident_count: row.incident_count,
+        open_count: row.open_count,
+        median_resolve_seconds: roundSeconds(row.median_resolve),
+      })),
+      notifications: {
+        // Skipped notifications were intentionally not sent (for example, the incident was already resolved).
+        total: notificationCount(["pending", "sending", "retrying", "sent", "sent_after_ack", "failed"]),
+        delivered: notificationCount(["sent", "sent_after_ack"]),
+        failed: notificationCount(["failed"]),
+      },
+    };
+  }
+
+  async addIncidentNote(incidentId: string, actorUserId: string, message: string): Promise<IncidentTimelineEntry> {
+    const entry = await this.db.$transaction(async (tx) => {
+      const [actor, incident] = await Promise.all([
+        tx.user.findUnique({ where: { id: actorUserId } }),
+        tx.incident.findUnique({ where: { id: incidentId } }),
+      ]);
+
+      if (!actor) throw new IncidentError("actor_not_found", "Actor user not found");
+      if (!incident) throw new IncidentError("incident_not_found", "Incident not found");
+
+      const created = await tx.incidentTimelineEntry.create({
+        data: { incidentId, type: "incident.note", message, actorUserId: actor.id },
+      });
+
+      await recordActivityLog(tx, {
+        workspaceId: incident.workspaceId,
+        resourceType: "incident",
+        resourceId: incidentId,
+        action: "incident.note_added",
+        message: `Note added by ${actor.name}`,
+        actorUserId: actor.id,
+        metadata: { incident_id: incident.id, timeline_entry_id: created.id },
+      });
+
+      return created;
+    });
+
+    return this.mapTimelineEntry(entry);
+  }
+
+  // Hands an acknowledged incident to another responder; the caller verifies the assignee can respond.
+  async reassignIncident(incidentId: string, actorUserId: string, assigneeUserId: string): Promise<Incident> {
+    const incident = await this.db.$transaction(async (tx) => {
+      const [actor, assignee, current] = await Promise.all([
+        tx.user.findUnique({ where: { id: actorUserId } }),
+        tx.user.findUnique({ where: { id: assigneeUserId } }),
+        tx.incident.findUnique({ where: { id: incidentId } }),
+      ]);
+
+      if (!actor) throw new IncidentError("actor_not_found", "Actor user not found");
+      if (!current) throw new IncidentError("incident_not_found", "Incident not found");
+      if (!assignee) throw new IncidentError("assignee_not_found", "Assignee user not found");
+      if (current.status !== "acknowledged") {
+        throw new IncidentError("invalid_incident_transition", "Only acknowledged incidents can be reassigned");
+      }
+      if (current.acknowledgedById === assignee.id) return current;
+
+      const updated = await tx.incident.update({
+        where: { id: incidentId },
+        data: { acknowledgedById: assignee.id },
+      });
+      const message = `Incident reassigned to ${assignee.name} by ${actor.name}`;
+
+      await tx.incidentTimelineEntry.create({
+        data: {
+          incidentId,
+          type: "incident.reassigned",
+          message,
+          actorUserId: actor.id,
+          metadata: { from_user_id: current.acknowledgedById, to_user_id: assignee.id },
+        },
+      });
+      await recordActivityLog(tx, {
+        workspaceId: updated.workspaceId,
+        resourceType: "incident",
+        resourceId: incidentId,
+        action: "incident.reassigned",
+        message,
+        actorUserId: actor.id,
+        metadata: {
+          incident_id: updated.id,
+          from_user_id: current.acknowledgedById,
+          to_user_id: assignee.id,
+        },
+      });
+
+      return updated;
+    });
+
+    return this.mapIncident(incident);
+  }
+
+  private buildIncidentScopeWhere(filters: IncidentListFilters) {
+    return {
+      ...(filters.workspace_id
+        ? { workspaceId: filters.workspace_id }
+        : filters.workspaceIds
+          ? { workspaceId: { in: filters.workspaceIds } }
+          : {}),
+      ...(filters.service_id ? { serviceId: filters.service_id } : {}),
+      ...(filters.severity ? { severity: filters.severity } : {}),
+      ...(filters.priority ? { priority: filters.priority } : {}),
+      ...(filters.acknowledged_by ? { acknowledgedById: filters.acknowledged_by } : {}),
+      // ponytail: unindexed ILIKE scan within the workspace; add a trigram index if title search gets slow.
+      ...(filters.q ? { title: { contains: filters.q, mode: "insensitive" as const } } : {}),
+    };
   }
 
   async getIncident(incidentId: string): Promise<Incident | null> {
@@ -495,7 +712,7 @@ export class IncidentService {
     return this.mapIncident(incident);
   }
 
-  async resolveIncident(incidentId: string, actorUserId?: string): Promise<Incident> {
+  async resolveIncident(incidentId: string, actorUserId?: string, options: { note?: string } = {}): Promise<Incident> {
     const incident = await this.db.$transaction(async (tx) => {
       const actor = actorUserId
         ? await tx.user.findUnique({ where: { id: actorUserId } })
@@ -539,6 +756,12 @@ export class IncidentService {
           actorUserId: actor.id,
         },
       });
+
+      if (options.note) {
+        await tx.incidentTimelineEntry.create({
+          data: { incidentId, type: "incident.note", message: options.note, actorUserId: actor.id, metadata: { context: "resolution" } },
+        });
+      }
 
       await tx.incidentEscalationState.updateMany({
         where: {

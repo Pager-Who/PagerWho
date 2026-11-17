@@ -88,3 +88,20 @@ export function useOverviewCurrentOnCall(serviceIds: string[]) {
     })),
   });
 }
+
+export function useOverviewIncidentMetrics(days: number) {
+  const { projectId } = useAuth();
+
+  return useQuery({
+    queryKey: queryKeys.incidents.metrics(projectId ?? "", days),
+    queryFn: () => {
+      if (!projectId) {
+        throw new Error("Project id is required");
+      }
+
+      return incidentApi.getIncidentMetrics({ workspace_id: projectId, days });
+    },
+    enabled: Boolean(projectId),
+    staleTime: 60_000,
+  });
+}

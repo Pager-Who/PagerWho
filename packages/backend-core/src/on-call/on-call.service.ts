@@ -6,6 +6,7 @@ import type {
   OnCallSchedule,
   OnCallSchedulePreview,
   OnCallSchedulePreviewQuery,
+  OnCallShift,
   UpdateOnCallScheduleRequest,
   UpsertOnCallRotationRequest,
   WorkspaceRole,
@@ -476,6 +477,65 @@ export class OnCallService {
       step_minutes: stepMinutes,
       entries,
     };
+  }
+
+  // A user's on-call shifts across schedules, resolved in memory with the same rotation and override rules
+  // as live paging. Shifts already running at `from` are clipped to the window.
+  async listUserShifts(
+    userId: string,
+    input: { workspaceIds: string[]; from: Date; to: Date },
+  ): Promise<OnCallShift[]> {
+    const schedules = await this.db.onCallSchedule.findMany({
+      where: {
+        workspaceId: { in: input.workspaceIds },
+        OR: [
+          { rotations: { some: { participants: { some: { userId } } } } },
+          { overrides: { some: { userId, startsAt: { lt: input.to }, endsAt: { gt: input.from } } } },
+        ],
+      },
+      include: {
+        rotations: {
+          include: { participants: { orderBy: { position: "asc" } } },
+          orderBy: { createdAt: "asc" },
+        },
+        overrides: {
+          where: { startsAt: { lt: input.to }, endsAt: { gt: input.from } },
+          orderBy: { createdAt: "desc" },
+        },
+      },
+      orderBy: { name: "asc" },
+    });
+    const shifts: OnCallShift[] = [];
+    const from = input.from.getTime();
+    const to = input.to.getTime();
+
+    for (const schedule of schedules) {
+      for (const layer of ["primary", "secondary"] as const) {
+        // Same picks as resolveLayerUserFromClient: newest covering override, else the oldest rotation of the layer.
+        const rotation = schedule.rotations.find((candidate) => candidate.layer === layer);
+        const overrides = schedule.overrides.filter((override) => override.layer === layer);
+        const resolveAt = (at: number) => {
+          const date = new Date(at);
+          return overrides.find((override) => override.startsAt <= date && override.endsAt > date)?.userId
+            ?? (rotation && rotation.participants.length > 0 ? this.pickRotationParticipant(rotation, date) : null);
+        };
+
+        for (const segment of resolveCoverageSegments(resolveAt, from, to, overrides)) {
+          if (segment.userId !== userId) continue;
+          shifts.push({
+            schedule_id: schedule.id,
+            schedule_name: schedule.name,
+            workspace_id: schedule.workspaceId,
+            timezone: schedule.timezone,
+            layer,
+            starts_at: new Date(segment.start).toISOString(),
+            ends_at: new Date(segment.end).toISOString(),
+          });
+        }
+      }
+    }
+
+    return shifts.sort((left, right) => left.starts_at.localeCompare(right.starts_at));
   }
 
   async resolveOnCallUserIdInTransaction(
@@ -986,4 +1046,57 @@ export class OnCallService {
       created_at: override.createdAt.toISOString(),
     };
   }
+}
+
+const hourMs = 60 * 60 * 1000;
+const minuteMs = 60 * 1000;
+
+// Splits [from, to) into runs with one on-call user. Rotations hand off at most once an hour (custom intervals are
+// whole hours, daily/weekly at local midnight), so hourly samples plus override edges catch every change, and a
+// minute-precision bisection places each handoff.
+// ponytail: O(hours in window) rotation picks; keep the window bounded (the API caps it) rather than modelling handoffs.
+export function resolveCoverageSegments(
+  resolveAt: (at: number) => string | null,
+  from: number,
+  to: number,
+  overrides: { startsAt: Date; endsAt: Date }[] = [],
+): { start: number; end: number; userId: string | null }[] {
+  const points = new Set<number>([from, to]);
+  for (let at = from + hourMs; at < to; at += hourMs) points.add(at);
+  for (const override of overrides) {
+    for (const edge of [override.startsAt.getTime(), override.endsAt.getTime()]) {
+      if (edge > from && edge < to) points.add(edge);
+    }
+  }
+  const sorted = [...points].sort((left, right) => left - right);
+  const segments: { start: number; end: number; userId: string | null }[] = [];
+  const push = (start: number, end: number, userId: string | null) => {
+    const last = segments.at(-1);
+    if (last && last.userId === userId && last.end === start) last.end = end;
+    else segments.push({ start, end, userId });
+  };
+
+  for (let index = 0; index < sorted.length - 1; index += 1) {
+    const start = sorted[index]!;
+    const end = sorted[index + 1]!;
+    const startUser = resolveAt(start);
+
+    if (end - start > minuteMs && resolveAt(end - 1) !== startUser) {
+      let low = start;
+      let high = end - 1;
+      while (high - low > minuteMs) {
+        const middle = Math.floor((low + high) / 2 / minuteMs) * minuteMs;
+        if (middle <= low) break;
+        if (resolveAt(middle) === startUser) low = middle;
+        else high = middle;
+      }
+      const handoff = Math.ceil(high / minuteMs) * minuteMs;
+      push(start, handoff, startUser);
+      push(handoff, end, resolveAt(handoff));
+    } else {
+      push(start, end, startUser);
+    }
+  }
+
+  return segments;
 }
