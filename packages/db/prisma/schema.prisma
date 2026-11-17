@@ -132,6 +132,8 @@ model User {
   suspendedWorkspaces     Workspace[]                  @relation("WorkspaceSuspendedBy")
   suspendedAt             DateTime?                    @map("suspended_at")
   suspensionReason        String?                      @map("suspension_reason")
+  // sha256 of the secret in the user's on-call ICS subscription URL; null = feed disabled.
+  calendarFeedTokenHash   String?                      @unique @map("calendar_feed_token_hash")
   createdWorkspaces       Workspace[]                  @relation("WorkspaceCreatedBy")
   workspaceMemberships    WorkspaceMember[]
   assignedWorkspaceMemberRoles WorkspaceMemberRole[]   @relation("WorkspaceMemberRoleAssignedBy")

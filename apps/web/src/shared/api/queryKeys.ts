@@ -48,6 +48,8 @@ export const queryKeys = {
     current: (serviceId?: string) => ["on-call", "current", serviceId ?? null] as const,
     schedules: (filters: WorkspaceScopedFilters = {}) => ["on-call", "schedules", filters] as const,
     schedule: (scheduleId: string) => ["on-call", "schedules", scheduleId] as const,
+    myShifts: (filters: WorkspaceScopedFilters = {}) => ["on-call", "my-shifts", filters] as const,
+    calendarFeed: ["on-call", "calendar-feed"] as const,
   },
   escalationPolicies: {
     all: ["escalation-policies"] as const,

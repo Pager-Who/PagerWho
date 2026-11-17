@@ -3,6 +3,7 @@ import type { Express } from "express";
 import { activityLogsRoutes } from "./activity-logs.routes";
 import { auditLogsRoutes } from "./audit-logs.routes";
 import { authRoutes } from "./auth.routes";
+import { calendarFeedsRoutes } from "./calendar-feeds.routes";
 import { escalationRoutes } from "./escalation.routes";
 import { incidentActionsRoutes } from "./incident-actions.routes";
 import { incidentsRoutes } from "./incidents.routes";
@@ -29,6 +30,7 @@ export function registerRoutes(app: Express) {
   app.use("/api/v1/services", servicesRoutes);
   app.use("/api/v1/incidents", incidentsRoutes);
   app.use("/api/v1/incident-actions", incidentActionsRoutes);
+  app.use("/api/v1/calendar-feeds", calendarFeedsRoutes);
   app.use("/api/v1/webhooks", webhooksRoutes);
   app.use("/api/v1/on-call", onCallRoutes);
   app.use("/api/v1/escalation-policies", escalationRoutes);

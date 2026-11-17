@@ -147,3 +147,37 @@ export function useOnCallSchedulePreview(scheduleId: string | undefined, query: 
     enabled: Boolean(scheduleId),
   });
 }
+
+export function useMyOnCallShifts() {
+  const { projectId } = useAuth();
+  const filters = projectId ? { workspace_id: projectId } : {};
+
+  return useQuery({
+    queryKey: queryKeys.onCall.myShifts(filters),
+    queryFn: () => onCallApi.listMyOnCallShifts({ ...filters, days: 14 }),
+    enabled: Boolean(projectId),
+  });
+}
+
+export function useCalendarFeed() {
+  return useQuery({ queryKey: queryKeys.onCall.calendarFeed, queryFn: () => onCallApi.getCalendarFeed() });
+}
+
+// The subscription URL is only returned by this call, so the caller keeps it in the mutation result.
+export function useRotateCalendarFeedMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: () => onCallApi.rotateCalendarFeed(),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.onCall.calendarFeed }),
+  });
+}
+
+export function useDisableCalendarFeedMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: () => onCallApi.disableCalendarFeed(),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.onCall.calendarFeed }),
+  });
+}

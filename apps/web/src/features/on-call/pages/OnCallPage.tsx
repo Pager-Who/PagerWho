@@ -59,6 +59,7 @@ import {
   useOnCallWorkspaceMembers,
   useUpdateOnCallScheduleMutation,
 } from "../queries";
+import { MyShiftsPanel } from "../components/MyShiftsPanel";
 
 type OnCallTab = "schedules" | "overrides" | "new-schedule";
 type CalendarPreviewMode = "week" | "month";
@@ -449,6 +450,8 @@ export function OnCallPage() {
         help="On-call schedules decide who receives responsibility for incidents. Use Schedules for recurring coverage and Overrides for temporary changes such as holidays or substitutions."
         title="On-call"
       />
+
+      <MyShiftsPanel />
 
       <Panel className="rounded-[20px] sm:p-5 grid gap-5">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-hairline-soft pb-2.5">

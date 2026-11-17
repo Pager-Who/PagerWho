@@ -11,10 +11,12 @@ import {
   previewOnCallScheduleHandler,
   updateOnCallScheduleHandler,
 } from "../handlers/on-call.handler";
+import { listMyOnCallShiftsHandler } from "../handlers/calendar-feed.handler";
 
 export const onCallRoutes = Router();
 
 onCallRoutes.get("/", getCurrentOnCallHandler);
+onCallRoutes.get("/my-shifts", listMyOnCallShiftsHandler);
 onCallRoutes.get("/schedules", listOnCallSchedulesHandler);
 onCallRoutes.post("/schedules", createOnCallScheduleHandler);
 onCallRoutes.get("/schedules/:scheduleId", getOnCallScheduleHandler);

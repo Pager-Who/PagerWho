@@ -38,6 +38,16 @@ export async function fulfillUnhandledApi(route: Route) {
     return;
   }
 
+  if (request.method() === "GET" && url.pathname === "/api/v1/on-call/my-shifts") {
+    await fulfillJson(route, { data: [] });
+    return;
+  }
+
+  if (request.method() === "GET" && url.pathname === "/api/v1/me/calendar-feed") {
+    await fulfillJson(route, { data: { enabled: false, url: null } });
+    return;
+  }
+
   if (request.method() === "GET" && /\/api\/v1\/workspaces\/[^/]+\/usage$/.test(url.pathname)) {
     await fulfillJson(route, {
       data: {
