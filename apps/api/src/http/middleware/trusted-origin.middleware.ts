@@ -6,7 +6,7 @@ import { isOriginAllowed, normalizeOrigin } from "../security/origin-policy";
 const safeMethods = new Set(["GET", "HEAD", "OPTIONS"]);
 
 export const trustedOriginMiddleware: RequestHandler = (req, _res, next) => {
-  if (safeMethods.has(req.method) || isWebhookIngestionPath(req.path)) {
+  if (safeMethods.has(req.method) || isWebhookIngestionPath(req.path) || isVoiceActionCallbackPath(req.path)) {
     next();
     return;
   }
@@ -48,4 +48,9 @@ function readRequestOrigin(req: Parameters<RequestHandler>[0]) {
 
 function isWebhookIngestionPath(path: string) {
   return /^\/api\/v1\/webhooks\/[0-9a-f-]+$/i.test(path);
+}
+
+// Twilio posts keypad input server-to-server; the signed token in the path authorizes it.
+function isVoiceActionCallbackPath(path: string) {
+  return /^\/api\/v1\/incident-actions\/voice\/[A-Za-z0-9_-]+$/.test(path);
 }

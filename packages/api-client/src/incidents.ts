@@ -1,6 +1,7 @@
 import type {
   CreateIncidentRequest,
   Incident,
+  IncidentActionLink,
   IncidentDetail,
   IncidentEscalationState,
   IncidentFilter,
@@ -34,6 +35,14 @@ export function createIncidentApi(client: ApiClient) {
     },
     acknowledgeIncident(incidentId: string) {
       return client.request<Incident>(`/incidents/${incidentId}/ack`, {
+        method: "POST",
+      });
+    },
+    getIncidentActionLink(token: string) {
+      return client.request<IncidentActionLink>(`/incident-actions/${encodeURIComponent(token)}`);
+    },
+    acknowledgeIncidentActionLink(token: string) {
+      return client.request<IncidentActionLink>(`/incident-actions/${encodeURIComponent(token)}/ack`, {
         method: "POST",
       });
     },

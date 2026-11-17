@@ -78,6 +78,21 @@ export const UpdateIncidentPriorityRequestSchema = z.object({
   priority: IncidentPrioritySchema,
 });
 
+// Public view behind a signed acknowledge link sent in notifications (no session required).
+export const IncidentActionLinkSchema = z.object({
+  incident: z.object({
+    id: UuidSchema,
+    title: z.string(),
+    service_name: z.string(),
+    severity: IncidentSeveritySchema,
+    priority: IncidentPrioritySchema,
+    status: IncidentStatusSchema,
+    created_at: DateTimeSchema,
+  }),
+  responder_name: z.string(),
+  expires_at: DateTimeSchema,
+});
+
 export const IncidentTimelineSummarySchema = z.object({
   total: z.number().int().min(0),
   latest_created_at: DateTimeSchema.nullable(),
@@ -111,6 +126,7 @@ export type IncidentTimelineQuery = z.infer<typeof IncidentTimelineQuerySchema>;
 export type IncidentNotificationsQuery = z.infer<typeof IncidentNotificationsQuerySchema>;
 export type IncidentActionRequest = z.infer<typeof IncidentActionRequestSchema>;
 export type UpdateIncidentPriorityRequest = z.infer<typeof UpdateIncidentPriorityRequestSchema>;
+export type IncidentActionLink = z.infer<typeof IncidentActionLinkSchema>;
 export type PaginatedIncidents = z.infer<typeof PaginatedIncidentsSchema>;
 export type PaginatedIncidentTimelineEntries = z.infer<typeof PaginatedIncidentTimelineEntriesSchema>;
 export type PaginatedIncidentNotifications = z.infer<typeof PaginatedIncidentNotificationsSchema>;
