@@ -34,6 +34,7 @@ import {
   type DataTableColumn,
 } from "../../../shared/components";
 import { LocalizedText } from "../../../shared/i18n";
+import { useKeyboardShortcuts } from "../../../shared/hooks/useKeyboardShortcuts";
 import { hasWorkspacePermission, useAuth } from "../../../shared/auth";
 import { formatDateTime, formatRelativeTime, shortId } from "../../../shared/utils";
 import {
@@ -106,6 +107,12 @@ export function IncidentDetailPage() {
     ?? updatePriorityMutation.error
     ?? triggerManualEscalationMutation.error
     ?? reassignMutation.error;
+
+  useKeyboardShortcuts({
+    a: () => {
+      if (canUseResponseActions && isAckActionVisible && !isActionPending) void handleAcknowledge();
+    },
+  });
 
   async function handleAcknowledge() {
     await acknowledgeIncidentMutation.mutateAsync();
@@ -219,6 +226,7 @@ export function IncidentDetailPage() {
               <div className="flex items-center flex-wrap gap-2 justify-start md:justify-end">
                 {canUseResponseActions && isAckActionVisible ? (
                   <Button
+                    aria-keyshortcuts="a"
                     disabled={isActionPending}
                     isLoading={acknowledgeIncidentMutation.isPending}
                     onClick={() => void handleAcknowledge()}

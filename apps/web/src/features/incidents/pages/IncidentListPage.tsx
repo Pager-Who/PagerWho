@@ -30,6 +30,7 @@ import {
   TextInput,
   type DataTableColumn,
 } from "../../../shared/components";
+import { moveListFocus, useKeyboardShortcuts } from "../../../shared/hooks/useKeyboardShortcuts";
 import { cn, formatDateTime, formatRelativeTime, shortId } from "../../../shared/utils";
 import { hasWorkspacePermission, useAuth } from "../../../shared/auth";
 import {
@@ -86,6 +87,8 @@ export function IncidentListPage() {
   const [isCreatePanelOpen, setIsCreatePanelOpen] = useState(Boolean(initialCreateServiceId));
   const [pageCursors, setPageCursors] = useState<string[]>([]);
   const createPanelRef = useRef<HTMLElement>(null);
+  const searchFormRef = useRef<HTMLFormElement>(null);
+  const incidentListRef = useRef<HTMLDivElement>(null);
   const [createForm, setCreateForm] = useState<CreateIncidentFormState>(() => ({
     ...defaultCreateFormState,
     serviceId: initialCreateServiceId ?? "",
@@ -210,6 +213,12 @@ export function IncidentListPage() {
     return () => cancelAnimationFrame(frame);
   }, [isCreatePanelOpen]);
 
+  useKeyboardShortcuts({
+    "/": () => searchFormRef.current?.querySelector("input")?.focus(),
+    j: () => moveListFocus(incidentListRef.current, "tbody tr[tabindex='0'], [data-incident-card]", 1),
+    k: () => moveListFocus(incidentListRef.current, "tbody tr[tabindex='0'], [data-incident-card]", -1),
+  });
+
   function updateFilter(key: FilterKey, value: string) {
     const nextParams = new URLSearchParams(searchParams);
     if (value) nextParams.set(key, value);
@@ -331,10 +340,11 @@ export function IncidentListPage() {
               />
             </div>
             <div className="flex flex-wrap items-end gap-3">
-              <form className="flex min-w-0 flex-1 basis-64 items-end gap-2" onSubmit={submitSearch} role="search">
+              <form className="flex min-w-0 flex-1 basis-64 items-end gap-2" onSubmit={submitSearch} ref={searchFormRef} role="search">
                 <div className="min-w-0 flex-1">
                   <Field label={t("Search incidents")}>
                     <TextInput
+                      aria-keyshortcuts="/"
                       onChange={(event) => setSearchDraft(event.target.value)}
                       placeholder={t("Search by title")}
                       type="search"
@@ -396,12 +406,15 @@ export function IncidentListPage() {
             <p className="m-0 text-ink-subtle text-xs leading-[1.4]">
               Open incidents are shown by default and sorted by response urgency. Use filters to narrow the queue without losing the current context.
             </p>
+            <p className="m-0 hidden text-ink-subtle text-xs leading-[1.4] sm:block">
+              Keyboard: / to search, j and k to move between incidents, Enter to open, a to acknowledge on an incident.
+            </p>
           </div>
 
           {incidentsQuery.isLoading || servicesQuery.isLoading ? <TablePageSkeleton label="Loading incidents" /> : null}
           {incidentsQuery.error ? <ErrorState error={incidentsQuery.error} onRetry={() => Promise.all([incidentsQuery.refetch(), servicesQuery.refetch()])} title="Could not load incidents" /> : null}
           {!incidentsQuery.isLoading && !incidentsQuery.error ? (
-            <div className="grid gap-2">
+            <div className="grid gap-2" ref={incidentListRef}>
             <div className="flex items-center justify-between gap-3 px-1">
                 <span className="text-ink-muted text-xs min-h-4 inline-flex items-center">
                 {incidentsQuery.isLoading ? <Skeleton className="h-3 w-36" /> : <>Page {pageCursors.length + 1} · {visibleIncidents.length} {visibleIncidents.length === 1 ? "incident" : "incidents"} shown</>}
@@ -441,6 +454,7 @@ export function IncidentListPage() {
               ) : visibleIncidents.map((incident) => (
                 <button
                   className="grid min-w-0 gap-2 rounded-xl border border-hairline bg-surface-2 p-3 text-left hover:border-accent/50"
+                  data-incident-card
                   key={incident.id}
                   onClick={() => navigate(`/incidents/${incident.id}`)}
                   type="button"
