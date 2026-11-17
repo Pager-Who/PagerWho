@@ -71,6 +71,41 @@ export const IncidentCountsSchema = z.object({
   critical_open: z.number().int(),
 });
 
+export const IncidentMetricsQuerySchema = z.object({
+  workspace_id: UuidSchema,
+  days: z.coerce.number().int().refine((value) => [7, 30, 90].includes(value), "Expected 7, 30, or 90").default(30),
+});
+
+const DurationStatsSchema = z.object({
+  average_seconds: z.number().nullable(),
+  median_seconds: z.number().nullable(),
+});
+
+export const IncidentMetricsSchema = z.object({
+  window_days: z.number().int(),
+  since: DateTimeSchema,
+  incident_count: z.number().int(),
+  acknowledged_count: z.number().int(),
+  resolved_count: z.number().int(),
+  // Created → first acknowledgement, over incidents created in the window that were acknowledged.
+  time_to_acknowledge: DurationStatsSchema,
+  // Created → resolved, over incidents created in the window that were resolved.
+  time_to_resolve: DurationStatsSchema,
+  by_priority: z.array(z.object({ priority: IncidentPrioritySchema, incident_count: z.number().int() })),
+  by_service: z.array(z.object({
+    service_id: UuidSchema,
+    service_name: z.string(),
+    incident_count: z.number().int(),
+    open_count: z.number().int(),
+    median_resolve_seconds: z.number().nullable(),
+  })),
+  notifications: z.object({
+    total: z.number().int(),
+    delivered: z.number().int(),
+    failed: z.number().int(),
+  }),
+});
+
 export const CreateIncidentNoteRequestSchema = z.object({
   message: z.string().trim().min(1).max(4000),
 });
@@ -149,6 +184,8 @@ export type UpdateIncidentPriorityRequest = z.infer<typeof UpdateIncidentPriorit
 export type IncidentActionLink = z.infer<typeof IncidentActionLinkSchema>;
 export type IncidentCountsQuery = z.infer<typeof IncidentCountsQuerySchema>;
 export type IncidentCounts = z.infer<typeof IncidentCountsSchema>;
+export type IncidentMetricsQuery = z.infer<typeof IncidentMetricsQuerySchema>;
+export type IncidentMetrics = z.infer<typeof IncidentMetricsSchema>;
 export type CreateIncidentNoteRequest = z.infer<typeof CreateIncidentNoteRequestSchema>;
 export type ReassignIncidentRequest = z.infer<typeof ReassignIncidentRequestSchema>;
 export type PaginatedIncidents = z.infer<typeof PaginatedIncidentsSchema>;

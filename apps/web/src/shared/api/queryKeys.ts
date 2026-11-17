@@ -14,6 +14,7 @@ export const queryKeys = {
     all: ["incidents"] as const,
     list: (filters: Partial<IncidentFilter> = {}) => ["incidents", "list", filters] as const,
     counts: (filters: Partial<IncidentFilter> = {}) => ["incidents", "counts", filters] as const,
+    metrics: (workspaceId: string, days: number) => ["incidents", "metrics", workspaceId, days] as const,
     detail: (incidentId: string) => ["incidents", "detail", incidentId] as const,
     timeline: (incidentId: string) => ["incidents", "timeline", incidentId] as const,
     notifications: (incidentId: string) => ["incidents", "notifications", incidentId] as const,

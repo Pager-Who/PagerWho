@@ -4,6 +4,7 @@ import {
   IncidentActionRequestSchema,
   IncidentCountsQuerySchema,
   IncidentFilterSchema,
+  IncidentMetricsQuerySchema,
   IncidentNotificationsQuerySchema,
   IncidentTimelineQuerySchema,
   ManualEscalationRequestSchema,
@@ -77,6 +78,21 @@ export const countIncidentsHandler: RequestHandler = async (req, res, next) => {
       ...parsedQuery.data,
       ...(workspaceIds ? { workspaceIds } : {}),
     }) });
+  } catch (error) {
+    next(mapIncidentError(error));
+  }
+};
+
+export const getIncidentMetricsHandler: RequestHandler = async (req, res, next) => {
+  try {
+    const parsedQuery = IncidentMetricsQuerySchema.safeParse(req.query);
+
+    if (!parsedQuery.success) {
+      throw new HttpError(400, "invalid_incident_metrics_query", "Invalid incident metrics query", parsedQuery.error.flatten());
+    }
+
+    await assertActorWorkspaceMember(req, parsedQuery.data.workspace_id);
+    res.json({ data: await incidentService.getIncidentMetrics(parsedQuery.data.workspace_id, parsedQuery.data.days) });
   } catch (error) {
     next(mapIncidentError(error));
   }

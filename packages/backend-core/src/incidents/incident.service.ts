@@ -3,6 +3,7 @@ import type {
   Incident,
   IncidentCounts,
   IncidentDetail,
+  IncidentMetrics,
   IncidentEscalationState,
   IncidentFilter,
   IncidentNotificationsQuery,
@@ -17,6 +18,24 @@ import type { PrismaClient, TransactionClient } from "@im/db";
 
 import { recordActivityLog } from "../activity";
 import { IncidentError } from "./incident.errors";
+
+type IncidentMetricsSummaryRow = {
+  incident_count: number;
+  acknowledged_count: number;
+  resolved_count: number;
+  ack_average: number | null;
+  ack_median: number | null;
+  resolve_average: number | null;
+  resolve_median: number | null;
+};
+
+type IncidentMetricsServiceRow = {
+  service_id: string;
+  service_name: string;
+  incident_count: number;
+  open_count: number;
+  median_resolve: number | null;
+};
 
 type IncidentRecord = {
   id: string;
@@ -161,6 +180,88 @@ export class IncidentService {
       acknowledged: countFor("acknowledged"),
       resolved: countFor("resolved"),
       critical_open: criticalOpen,
+    };
+  }
+
+  // Response metrics for incidents created in the last `days`. Durations are measured from creation, so they include
+  // escalation wait time, which is what the responder experiences.
+  async getIncidentMetrics(workspaceId: string, days: number, now: Date = new Date()): Promise<IncidentMetrics> {
+    const since = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+    const [summaryRows, byPriority, serviceRows, notificationRows] = await Promise.all([
+      this.db.$queryRaw<IncidentMetricsSummaryRow[]>`
+        SELECT
+          count(*)::int AS incident_count,
+          count(acknowledged_at)::int AS acknowledged_count,
+          count(resolved_at)::int AS resolved_count,
+          avg(extract(epoch FROM acknowledged_at - created_at))::float8 AS ack_average,
+          percentile_cont(0.5) WITHIN GROUP (ORDER BY extract(epoch FROM acknowledged_at - created_at))::float8 AS ack_median,
+          avg(extract(epoch FROM resolved_at - created_at))::float8 AS resolve_average,
+          percentile_cont(0.5) WITHIN GROUP (ORDER BY extract(epoch FROM resolved_at - created_at))::float8 AS resolve_median
+        FROM incidents
+        WHERE workspace_id = ${workspaceId}::uuid AND created_at >= ${since}
+      `,
+      this.db.incident.groupBy({
+        by: ["priority"],
+        where: { workspaceId, createdAt: { gte: since } },
+        _count: { _all: true },
+      }),
+      this.db.$queryRaw<IncidentMetricsServiceRow[]>`
+        SELECT
+          i.service_id::text AS service_id,
+          s.name AS service_name,
+          count(*)::int AS incident_count,
+          count(*) FILTER (WHERE i.status <> 'resolved')::int AS open_count,
+          percentile_cont(0.5) WITHIN GROUP (ORDER BY extract(epoch FROM i.resolved_at - i.created_at))::float8 AS median_resolve
+        FROM incidents i
+        JOIN services s ON s.id = i.service_id
+        WHERE i.workspace_id = ${workspaceId}::uuid AND i.created_at >= ${since}
+        GROUP BY i.service_id, s.name
+        ORDER BY incident_count DESC, s.name ASC
+        LIMIT 10
+      `,
+      this.db.notificationLog.groupBy({
+        by: ["status"],
+        where: { createdAt: { gte: since }, incident: { workspaceId } },
+        _count: { _all: true },
+      }),
+    ]);
+    const summary = summaryRows[0];
+    const notificationCount = (statuses: string[]) => notificationRows
+      .filter((row) => statuses.includes(row.status))
+      .reduce((total, row) => total + row._count._all, 0);
+    const roundSeconds = (value: number | null | undefined) => (value === null || value === undefined ? null : Math.round(value));
+
+    return {
+      window_days: days,
+      since: since.toISOString(),
+      incident_count: summary?.incident_count ?? 0,
+      acknowledged_count: summary?.acknowledged_count ?? 0,
+      resolved_count: summary?.resolved_count ?? 0,
+      time_to_acknowledge: {
+        average_seconds: roundSeconds(summary?.ack_average),
+        median_seconds: roundSeconds(summary?.ack_median),
+      },
+      time_to_resolve: {
+        average_seconds: roundSeconds(summary?.resolve_average),
+        median_seconds: roundSeconds(summary?.resolve_median),
+      },
+      by_priority: [...byPriority].sort((left, right) => left.priority.localeCompare(right.priority)).map((row) => ({
+        priority: row.priority as IncidentPriority,
+        incident_count: row._count._all,
+      })),
+      by_service: serviceRows.map((row) => ({
+        service_id: row.service_id,
+        service_name: row.service_name,
+        incident_count: row.incident_count,
+        open_count: row.open_count,
+        median_resolve_seconds: roundSeconds(row.median_resolve),
+      })),
+      notifications: {
+        // Skipped notifications were intentionally not sent (for example, the incident was already resolved).
+        total: notificationCount(["pending", "sending", "retrying", "sent", "sent_after_ack", "failed"]),
+        delivered: notificationCount(["sent", "sent_after_ack"]),
+        failed: notificationCount(["failed"]),
+      },
     };
   }
 

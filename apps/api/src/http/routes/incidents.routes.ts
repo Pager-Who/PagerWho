@@ -9,6 +9,7 @@ import {
   getIncidentDetailHandler,
   getIncidentEscalationHandler,
   getIncidentHandler,
+  getIncidentMetricsHandler,
   getIncidentNotificationsHandler,
   getIncidentTimelineHandler,
   listIncidentsHandler,
@@ -21,6 +22,7 @@ export const incidentsRoutes = Router();
 
 incidentsRoutes.get("/", listIncidentsHandler);
 incidentsRoutes.get("/counts", countIncidentsHandler);
+incidentsRoutes.get("/metrics", getIncidentMetricsHandler);
 incidentsRoutes.post("/", createIncidentHandler);
 incidentsRoutes.get("/:incidentId/detail", getIncidentDetailHandler);
 incidentsRoutes.get("/:incidentId", getIncidentHandler);

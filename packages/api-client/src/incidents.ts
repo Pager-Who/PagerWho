@@ -5,6 +5,8 @@ import type {
   IncidentActionLink,
   IncidentCounts,
   IncidentCountsQuery,
+  IncidentMetrics,
+  IncidentMetricsQuery,
   IncidentTimelineEntry,
   ReassignIncidentRequest,
   IncidentDetail,
@@ -59,6 +61,9 @@ export function createIncidentApi(client: ApiClient) {
     },
     countIncidents(filters: IncidentCountsQuery = {}) {
       return client.request<IncidentCounts>(`/incidents/counts${buildQueryString(filters)}`);
+    },
+    getIncidentMetrics(query: IncidentMetricsQuery) {
+      return client.request<IncidentMetrics>(`/incidents/metrics${buildQueryString(query)}`);
     },
     addIncidentNote(incidentId: string, input: CreateIncidentNoteRequest) {
       return client.request<IncidentTimelineEntry>(`/incidents/${incidentId}/notes`, {

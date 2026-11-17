@@ -1,24 +1,28 @@
 import type { Incident, OnCallSchedule, Service, ServiceStatus, User, WorkspaceMember } from "@im/contracts";
 import { ArrowRight, CheckCircle2, Circle, Clock3, Layers3, RadioTower, Siren } from "lucide-react";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
 import {
   Badge,
   EmptyState,
   ErrorState,
+  Field,
   IncidentPriorityBadge,
   IncidentStatusBadge,
   OverviewSkeleton,
   PageHeader,
   Panel,
+  Select,
   ServiceStatusBadge,
+  Skeleton,
 } from "../../../shared/components";
-import { LocalizedText } from "../../../shared/i18n";
-import { cn, formatDateTime, formatRelativeTime, shortId } from "../../../shared/utils";
+import { LocalizedText, useStaticText } from "../../../shared/i18n";
+import { cn, formatDateTime, formatDurationSeconds, formatRelativeTime, shortId } from "../../../shared/utils";
 import {
   useOverviewCurrentOnCall,
   useOverviewEscalationPolicies,
+  useOverviewIncidentMetrics,
   useOverviewIncidents,
   useOverviewOnCallSchedules,
   useOverviewServices,
@@ -248,6 +252,8 @@ export function OverviewPage() {
                 </div>
               </Panel>
             </section>
+
+            <ResponseMetricsPanel />
           </>
         ) : null}
       </section>
@@ -371,6 +377,85 @@ function ReadinessRow({ item }: { item: ReadinessItem }) {
       <span className="min-w-0 text-sm font-semibold leading-tight text-ink">{item.label}</span>
       <ArrowRight className="text-ink-subtle" size={14} strokeWidth={2.2} />
     </Link>
+  );
+}
+
+const metricsWindowOptions = [7, 30, 90] as const;
+
+function ResponseMetricsPanel() {
+  const t = useStaticText();
+  const [days, setDays] = useState<(typeof metricsWindowOptions)[number]>(30);
+  const metricsQuery = useOverviewIncidentMetrics(days);
+  const metrics = metricsQuery.data;
+  const deliveryRate = metrics && metrics.notifications.total > 0
+    ? `${Math.round((metrics.notifications.delivered / metrics.notifications.total) * 100)}%`
+    : "-";
+
+  return (
+    <Panel className="grid gap-4" padding="lg">
+      <SectionHeading
+        action={(
+          <Field label="Time window">
+            <Select onChange={(event) => setDays(Number(event.target.value) as typeof days)} value={days}>
+              {metricsWindowOptions.map((option) => (
+                <option key={option} value={option}>{t(`Last ${option} days`)}</option>
+              ))}
+            </Select>
+          </Field>
+        )}
+        description={t("How quickly incidents created in the selected window were acknowledged and resolved. Durations are measured from incident creation.")}
+        title={t("Response metrics")}
+      />
+      {metricsQuery.isLoading ? <Skeleton aria-label={t("Loading response metrics")} className="h-24 w-full" /> : null}
+      {metricsQuery.error ? <ErrorState error={metricsQuery.error} onRetry={() => metricsQuery.refetch()} title={t("Could not load response metrics")} /> : null}
+      {metrics ? (
+        metrics.incident_count === 0 ? (
+          <EmptyState message={t("No incidents were created in this window.")} title={t("No incidents to measure")} />
+        ) : (
+          <>
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <CoverageStat label={t("Incidents")} value={metrics.incident_count} />
+              <CoverageStat label={t("Median time to acknowledge")} value={formatDurationSeconds(metrics.time_to_acknowledge.median_seconds)} />
+              <CoverageStat label={t("Median time to resolve")} value={formatDurationSeconds(metrics.time_to_resolve.median_seconds)} />
+              <CoverageStat label={t("Notification delivery")} value={deliveryRate} />
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {metrics.by_priority.map((row) => (
+                <span className="inline-flex items-center gap-1.5 text-xs text-ink-muted" key={row.priority}>
+                  <IncidentPriorityBadge priority={row.priority} />
+                  {row.incident_count}
+                </span>
+              ))}
+            </div>
+            {metrics.by_service.length > 0 ? (
+              <table className="w-full border-collapse text-sm">
+                <caption className="sr-only">{t("Incidents by service")}</caption>
+                <thead>
+                  <tr className="text-left text-xs text-ink-subtle">
+                    <th className="py-2 pr-3 font-semibold" scope="col">{t("Service")}</th>
+                    <th className="py-2 pr-3 text-right font-semibold" scope="col">{t("Incidents")}</th>
+                    <th className="py-2 pr-3 text-right font-semibold" scope="col">{t("Open")}</th>
+                    <th className="py-2 text-right font-semibold" scope="col">{t("Median resolve")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {metrics.by_service.map((row) => (
+                    <tr className="border-t border-hairline" key={row.service_id}>
+                      <td className="max-w-0 truncate py-2 pr-3">
+                        <Link className="text-ink no-underline hover:text-accent" to={`/services/${row.service_id}`}>{row.service_name}</Link>
+                      </td>
+                      <td className="py-2 pr-3 text-right tabular-nums">{row.incident_count}</td>
+                      <td className="py-2 pr-3 text-right tabular-nums">{row.open_count}</td>
+                      <td className="py-2 text-right tabular-nums">{formatDurationSeconds(row.median_resolve_seconds)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : null}
+          </>
+        )
+      ) : null}
+    </Panel>
   );
 }
 
