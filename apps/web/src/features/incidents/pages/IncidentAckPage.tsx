@@ -11,13 +11,14 @@ import {
   LoadingState,
   Panel,
 } from "../../../shared/components";
-import { LocalizedText } from "../../../shared/i18n";
+import { LocalizedText, useStaticText } from "../../../shared/i18n";
 import { formatRelativeTime } from "../../../shared/utils";
 import { useAcknowledgeIncidentActionLinkMutation, useIncidentActionLink } from "../queries";
 
 // Landing page for the signed acknowledge link in notifications. Works without a session so a
 // paged responder can take ownership from their phone; the GET never acknowledges (link scanners).
 export function IncidentAckPage() {
+  const t = useStaticText();
   const { token = "" } = useParams();
   const linkQuery = useIncidentActionLink(token);
   const acknowledgeMutation = useAcknowledgeIncidentActionLinkMutation(token);
@@ -56,7 +57,7 @@ export function IncidentAckPage() {
                   size="md"
                   variant="primary"
                 >
-                  {`Acknowledge as ${link.responder_name}`}
+                  {t("Acknowledge as {{0}}").replace("{{0}}", link.responder_name)}
                 </Button>
                 <p className="m-0 text-ink-subtle text-xs leading-[1.45]">
                   Acknowledging stops further escalation and tells the team you own this incident.
