@@ -17,6 +17,7 @@ export const queryKeys = {
     timeline: (incidentId: string) => ["incidents", "timeline", incidentId] as const,
     notifications: (incidentId: string) => ["incidents", "notifications", incidentId] as const,
     escalation: (incidentId: string) => ["incidents", "escalation", incidentId] as const,
+    actionLink: (token: string) => ["incidents", "action-link", token] as const,
   },
   services: {
     all: ["services"] as const,

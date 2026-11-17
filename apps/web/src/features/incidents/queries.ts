@@ -1,9 +1,12 @@
 import type { CreateIncidentRequest, IncidentFilter, IncidentPriority, ManualEscalationRequest } from "@im/contracts";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { incidentApi, serviceApi, workspaceApi } from "../../shared/api/client";
+import { incidentApi, serviceApi, userApi, workspaceApi } from "../../shared/api/client";
 import { queryKeys } from "../../shared/api/queryKeys";
 import { useAuth } from "../../shared/auth";
+
+// Keep the response view current when someone else acknowledges or escalation advances.
+const incidentRefreshIntervalMs = 30_000;
 
 export function useIncidentList(filters: Partial<IncidentFilter>) {
   const { projectId } = useAuth();
@@ -13,6 +16,7 @@ export function useIncidentList(filters: Partial<IncidentFilter>) {
     queryKey: queryKeys.incidents.list(scopedFilters),
     queryFn: () => incidentApi.listIncidents(scopedFilters),
     enabled: Boolean(projectId),
+    refetchInterval: incidentRefreshIntervalMs,
   });
 }
 
@@ -24,6 +28,18 @@ export function useIncidentServiceOptions() {
     queryKey: queryKeys.services.list(filters),
     queryFn: () => serviceApi.listServices(filters),
     enabled: Boolean(projectId),
+  });
+}
+
+export function useIncidentUserNames() {
+  const { projectId } = useAuth();
+  const filters = projectId ? { workspace_id: projectId } : {};
+
+  return useQuery({
+    queryKey: queryKeys.users.list(filters),
+    queryFn: () => userApi.listUsers(filters),
+    enabled: Boolean(projectId),
+    select: (users) => new Map(users.map((user) => [user.id, user.name || user.email])),
   });
 }
 
@@ -50,6 +66,7 @@ export function useIncidentDetail(incidentId: string | undefined) {
       return incidentApi.getIncidentDetail(incidentId);
     },
     enabled: Boolean(incidentId),
+    refetchInterval: incidentRefreshIntervalMs,
   });
 }
 
@@ -64,6 +81,7 @@ export function useIncidentTimeline(incidentId: string | undefined) {
       return incidentApi.getIncidentTimeline(incidentId, { limit: 100 });
     },
     enabled: Boolean(incidentId),
+    refetchInterval: incidentRefreshIntervalMs,
   });
 }
 
@@ -78,6 +96,28 @@ export function useIncidentNotifications(incidentId: string | undefined) {
       return incidentApi.getIncidentNotifications(incidentId, { limit: 100 });
     },
     enabled: Boolean(incidentId),
+    refetchInterval: incidentRefreshIntervalMs,
+  });
+}
+
+export function useIncidentActionLink(token: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.incidents.actionLink(token ?? ""),
+    queryFn: () => incidentApi.getIncidentActionLink(token ?? ""),
+    enabled: Boolean(token),
+    retry: false,
+  });
+}
+
+export function useAcknowledgeIncidentActionLinkMutation(token: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: () => incidentApi.acknowledgeIncidentActionLink(token),
+    onSuccess: (link) => {
+      queryClient.setQueryData(queryKeys.incidents.actionLink(token), link);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.incidents.all });
+    },
   });
 }
 

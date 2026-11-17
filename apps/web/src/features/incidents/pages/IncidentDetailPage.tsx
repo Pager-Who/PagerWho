@@ -42,6 +42,7 @@ import {
   useIncidentNotifications,
   useIncidentServiceOptions,
   useIncidentTimeline,
+  useIncidentUserNames,
   useIncidentWorkspaceRoles,
   useResolveIncidentMutation,
   useTriggerManualEscalationMutation,
@@ -63,6 +64,7 @@ export function IncidentDetailPage() {
   const timelineQuery = useIncidentTimeline(incidentId);
   const notificationsQuery = useIncidentNotifications(incidentId);
   const servicesQuery = useIncidentServiceOptions();
+  const userNamesQuery = useIncidentUserNames();
 
   const acknowledgeIncidentMutation = useAcknowledgeIncidentMutation(incidentId ?? "");
   const resolveIncidentMutation = useResolveIncidentMutation(incidentId ?? "");
@@ -77,6 +79,9 @@ export function IncidentDetailPage() {
   const notifications = notificationsQuery.data?.items ?? [];
   const services = servicesQuery.data?.items ?? [];
   const serviceNameById = useMemo(() => createServiceNameMap(services), [services]);
+  const userNameById = userNamesQuery.data;
+  const formatUser = (userId: string) => userNameById?.get(userId) ?? shortId(userId);
+  const responderName = incident?.acknowledged_by ? formatUser(incident.acknowledged_by) : null;
   const notificationColumns = useMemo<Array<DataTableColumn<NotificationLog>>>(() => createNotificationColumns(), []);
 
   const canUseResponseActions = isPlatformAdmin || canUseIncidentResponseActions(workspaceRoles);
@@ -155,7 +160,7 @@ export function IncidentDetailPage() {
             <span className="text-ink-subtle">·</span>
             <span>Opened {formatRelativeTime(incident.created_at)}</span>
             <span className="text-ink-subtle">·</span>
-            <span>{incident.acknowledged_by ? "Responder assigned" : "Unassigned"}</span>
+            <span>{responderName ?? "Unassigned"}</span>
           </span>
         ) : <Skeleton className="h-4 w-80 max-w-full" />}
         eyebrow={<Link className="text-ink-muted text-[13px] font-[650] leading-none no-underline hover:text-ink" to="/incidents">← Incidents</Link>}
@@ -216,7 +221,7 @@ export function IncidentDetailPage() {
             <div className="grid gap-2.5 grid-cols-2 md:grid-cols-4 min-w-0">
               <ResponseSignal label="Service" value={serviceNameById.get(incident.service_id) ?? shortId(incident.service_id)} />
               <ResponseSignal label="Opened" value={formatRelativeTime(incident.created_at)} />
-              <ResponseSignal label="Responder" value={incident.acknowledged_by ? "Assigned" : "Unassigned"} />
+              <ResponseSignal label="Responder" value={responderName ?? "Unassigned"} />
               <ResponseSignal label="Notifications" value={detail.notification_summary.total} />
             </div>
 
@@ -313,8 +318,8 @@ export function IncidentDetailPage() {
                     ["Source", incident.source],
                     ["Created", formatDateTime(incident.created_at)],
                     ["Updated", formatDateTime(incident.updated_at)],
-                    ["Acknowledged", formatNullableAction(incident.acknowledged_by, incident.acknowledged_at)],
-                    ["Resolved", formatNullableAction(incident.resolved_by, incident.resolved_at)],
+                    ["Acknowledged", formatNullableAction(incident.acknowledged_by, incident.acknowledged_at, formatUser)],
+                    ["Resolved", formatNullableAction(incident.resolved_by, incident.resolved_at, formatUser)],
                   ]}
                 />
                 <div className="grid gap-2.5 min-w-0 max-w-full overflow-hidden border-t border-hairline pt-3.5">
@@ -442,6 +447,22 @@ function getNextResponseDescription(status: string) {
   return "Review the timeline and notification history for follow-up and post-incident learning.";
 }
 
+// Timeline types written by backend-core; unknown future types fall back to the raw key.
+const timelineTypeLabels: Record<string, string> = {
+  "incident.created": "Incident created",
+  "incident.event_attached": "Alert event attached",
+  "incident.acknowledged": "Acknowledged",
+  "incident.resolved": "Resolved",
+  "incident.priority_updated": "Priority changed",
+  "escalation.started": "Escalation started",
+  "escalation.restarted": "Escalation restarted",
+  "escalation.step_executed": "Escalation step notified",
+  "escalation.repeated": "Escalation repeated",
+  "escalation.stopped": "Escalation stopped",
+  "escalation.manual_triggered": "Manual escalation",
+  "notification.skipped": "Notification skipped",
+};
+
 function Timeline({ entries }: { entries: IncidentTimelineEntry[] }) {
   if (entries.length === 0) {
     return <EmptyState message="No timeline entries have been recorded." title="No timeline" />;
@@ -454,7 +475,7 @@ function Timeline({ entries }: { entries: IncidentTimelineEntry[] }) {
           <div className="bg-ink rounded-full h-2 w-2 mt-1.25" />
           <div className="grid gap-2 min-w-0">
             <div className="flex items-center flex-wrap gap-2 justify-between">
-              <strong className="text-ink text-sm font-[650] leading-[1.3]">{entry.type}</strong>
+              <strong className="text-ink text-sm font-[650] leading-[1.3]">{timelineTypeLabels[entry.type] ?? entry.type}</strong>
               <time className="text-ink-subtle text-xs" dateTime={entry.created_at} title={formatDateTime(entry.created_at)}>
                 {formatRelativeTime(entry.created_at)}
               </time>
@@ -534,9 +555,9 @@ function createServiceNameMap(services: Service[]) {
   return new Map(services.map((service) => [service.id, service.name]));
 }
 
-function formatNullableAction(actorId: string | null, actedAt: string | null) {
+function formatNullableAction(actorId: string | null, actedAt: string | null, formatUser: (userId: string) => string) {
   if (!actedAt) return "-";
-  return actorId ? `${formatDateTime(actedAt)} by ${shortId(actorId)}` : formatDateTime(actedAt);
+  return actorId ? `${formatDateTime(actedAt)} by ${formatUser(actorId)}` : formatDateTime(actedAt);
 }
 
 function formatNotificationTargetType(value: string) {

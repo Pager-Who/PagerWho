@@ -4,6 +4,7 @@ import { AdminPage } from "../features/admin/pages/AdminPage";
 import { AuthPage } from "../features/auth/pages/AuthPage";
 import { DocsPage } from "../features/docs/pages/DocsPage";
 import { EscalationPoliciesPage } from "../features/escalation-policies/pages/EscalationPoliciesPage";
+import { IncidentAckPage } from "../features/incidents/pages/IncidentAckPage";
 import { IncidentDetailPage } from "../features/incidents/pages/IncidentDetailPage";
 import { IncidentListPage } from "../features/incidents/pages/IncidentListPage";
 import { LandingPage } from "../features/landing/pages/LandingPage";
@@ -27,6 +28,7 @@ export function App() {
       <Routes>
         <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<AuthPage />} />
+        <Route path="/ack/:token" element={<IncidentAckPage />} />
         <Route path="/docs" element={<DocsPage />} />
         <Route path="/docs/:slug" element={<DocsPage />} />
         <Route path="/privacy" element={<LegalPage document="privacy" />} />
