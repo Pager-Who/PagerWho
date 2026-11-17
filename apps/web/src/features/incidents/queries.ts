@@ -1,4 +1,5 @@
 import type {
+  CopilotLocale,
   CreateIncidentRequest,
   IncidentCountsQuery,
   IncidentFilter,
@@ -13,6 +14,10 @@ import { useAuth } from "../../shared/auth";
 
 // Keep the response view current when someone else acknowledges or escalation advances.
 const incidentRefreshIntervalMs = 30_000;
+
+export function useIncidentSummaryMutation(incidentId: string, locale: CopilotLocale) {
+  return useMutation({ mutationFn: () => incidentApi.summarizeIncident(incidentId, { locale }), retry: false });
+}
 
 export function useIncidentList(filters: Partial<IncidentFilter>) {
   const { projectId } = useAuth();

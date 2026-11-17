@@ -1,6 +1,7 @@
 import {
   ApiClient,
   createAuthApi,
+  createCopilotApi,
   createActivityLogApi,
   createAuditLogApi,
   createEscalationApi,
@@ -40,6 +41,7 @@ export const apiClient = new ApiClient({
 });
 
 export const authApi = createAuthApi(apiClient);
+export const copilotApi = createCopilotApi(apiClient);
 export const incidentApi = createIncidentApi(apiClient);
 export const serviceApi = createServiceApi(apiClient);
 export const onCallApi = createOnCallApi(apiClient);

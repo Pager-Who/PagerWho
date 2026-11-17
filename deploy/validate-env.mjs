@@ -34,6 +34,12 @@ export function validateDeploymentEnv(env, mode) {
   if (smtp.some(name => env[name]?.trim())) {
     for (const name of smtp) if (!env[name]?.trim()) errors.push(name + " is required when authentication email is enabled");
   }
+  const copilot = ["COPILOT_API_KEY", "COPILOT_BASE_URL", "COPILOT_MODEL"];
+  if (copilot.some(name => env[name]?.trim())) {
+    // Partial Copilot configuration keeps Copilot disabled at runtime; fail early instead.
+    for (const name of copilot) if (!env[name]?.trim()) errors.push(name + " is required when Copilot is enabled");
+  }
+  if (!["", "responses", "chat-completions"].includes(env.COPILOT_API_FORMAT?.trim() ?? "")) errors.push("COPILOT_API_FORMAT must be responses or chat-completions");
   if (!["auto", "live", "log"].includes(env.NOTIFICATION_DELIVERY_MODE || (mode === "prod" ? "live" : "log"))) errors.push("NOTIFICATION_DELIVERY_MODE must be auto, live, or log");
   const retention = env.PAGERWHO_RETENTION_DAYS;
   if (retention !== undefined && (!/^\d+$/.test(retention) || Number(retention) < 1 || Number(retention) > 36500)) errors.push("PAGERWHO_RETENTION_DAYS must be between 1 and 36500");

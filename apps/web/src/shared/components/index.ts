@@ -2,6 +2,7 @@ export * from "./Badge";
 export * from "./BrandMark";
 export * from "./Button";
 export * from "./CodeBlock";
+export * from "./CopilotMark";
 export * from "./DataTable";
 export * from "./DescriptionList";
 export * from "./Dialog";

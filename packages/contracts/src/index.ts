@@ -1,6 +1,7 @@
 export * from "./common";
 export * from "./enums";
 export * from "./auth";
+export * from "./copilot";
 export * from "./quotas";
 export * from "./platform";
 export * from "./activity";
@@ -15,3 +16,6 @@ export * from "./escalation";
 export * from "./notifications";
 export * from "./workers";
 export * from "./workflows";
+export * from "./copilot-provider";
+export * from "./incident-summary";
+export * from "./product-docs";

@@ -16,7 +16,9 @@ import {
   resolveIncidentHandler,
   triggerManualEscalationHandler,
   updateIncidentPriorityHandler,
+  summarizeIncidentHandler,
 } from "../handlers/incidents.handler";
+import { requireCopilotEnabled } from "../middleware/copilot-enabled.middleware";
 
 export const incidentsRoutes = Router();
 
@@ -25,6 +27,7 @@ incidentsRoutes.get("/counts", countIncidentsHandler);
 incidentsRoutes.get("/metrics", getIncidentMetricsHandler);
 incidentsRoutes.post("/", createIncidentHandler);
 incidentsRoutes.get("/:incidentId/detail", getIncidentDetailHandler);
+incidentsRoutes.post("/:incidentId/ai-summary", requireCopilotEnabled, summarizeIncidentHandler);
 incidentsRoutes.get("/:incidentId", getIncidentHandler);
 incidentsRoutes.post("/:incidentId/ack", acknowledgeIncidentHandler);
 incidentsRoutes.post("/:incidentId/resolve", resolveIncidentHandler);

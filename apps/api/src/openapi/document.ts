@@ -128,6 +128,7 @@ export const openApiDocument = {
   tags: [
     { name: "Health" },
     { name: "Auth" },
+    { name: "Copilot" },
     { name: "Services" },
     { name: "Incidents" },
     { name: "Webhooks" },
@@ -289,6 +290,38 @@ export const openApiDocument = {
         requestBody: jsonBody("#/components/schemas/CreateServiceRequest"),
         responses: {
           "201": dataResponse("Created service with default webhook one-time secret", "#/components/schemas/CreateServiceResponse"),
+        },
+      },
+    },
+    "/api/v1/copilot/status": {
+      get: {
+        tags: ["Copilot"],
+        summary: "Get Copilot model status",
+        parameters: [actorUserHeader],
+        responses: {
+          "200": dataResponse("Copilot status", "#/components/schemas/CopilotStatusResponse"),
+        },
+      },
+    },
+    "/api/v1/copilot/ask": {
+      post: {
+        tags: ["Copilot"],
+        summary: "Ask Copilot",
+        parameters: [actorUserHeader],
+        requestBody: jsonBody("#/components/schemas/CopilotAskRequest"),
+        responses: {
+          "200": dataResponse("Copilot answer", "#/components/schemas/CopilotAskResponse"),
+        },
+      },
+    },
+    "/api/v1/copilot/execute": {
+      post: {
+        tags: ["Copilot"],
+        summary: "Execute an approved Copilot proposal",
+        parameters: [actorUserHeader],
+        requestBody: jsonBody("#/components/schemas/CopilotExecuteRequest"),
+        responses: {
+          "200": dataResponse("Copilot execution result", "#/components/schemas/CopilotAskResponse"),
         },
       },
     },
@@ -1321,6 +1354,190 @@ export const openApiDocument = {
         required: ["revoked"],
         properties: {
           revoked: { type: "boolean" },
+        },
+      },
+      CopilotSource: {
+        type: "object",
+        required: ["title", "path", "snippet"],
+        properties: {
+          title: { type: "string" },
+          path: { type: "string" },
+          snippet: { type: "string" },
+        },
+      },
+      CopilotAskRequest: {
+        type: "object",
+        required: ["question"],
+        properties: {
+          question: { type: "string", minLength: 1, maxLength: 1000 },
+          locale: { type: "string", enum: ["en", "ko", "zh-CN"] },
+          workspace_id: { type: "string", format: "uuid" },
+          structured_input: { $ref: "#/components/schemas/CopilotClarificationSubmission" },
+          history: {
+            type: "array",
+            maxItems: 8,
+            items: {
+              type: "object",
+              required: ["role", "content"],
+              properties: {
+                role: { type: "string", enum: ["assistant", "user"] },
+                content: { type: "string", minLength: 1, maxLength: 4000 },
+              },
+            },
+          },
+        },
+      },
+      CopilotTaskState: {
+        type: "object",
+        required: ["task_id", "pending_goal", "operation"],
+        properties: {
+          task_id: { type: "string" },
+          pending_goal: { type: "string" },
+          operation: {
+            type: "string",
+            enum: [
+              "attach_on_call_to_service",
+              "configure_notification",
+              "create_on_call_schedule",
+              "create_service",
+              "improve_workspace",
+              "rename_service",
+              "turnkey_setup",
+            ],
+          },
+          known_inputs: {
+            type: "object",
+            additionalProperties: { type: "string" },
+          },
+          required_fields: {
+            type: "array",
+            items: { type: "string" },
+          },
+          target: {
+            type: "object",
+            properties: {
+              id: { type: "string" },
+              name: { type: "string" },
+              type: {
+                type: "string",
+                enum: ["escalation_policy", "notification_provider", "on_call_schedule", "service", "workspace"],
+              },
+            },
+          },
+        },
+      },
+      CopilotClarificationSubmission: {
+        type: "object",
+        properties: {
+          task_id: { type: "string" },
+          task: { $ref: "#/components/schemas/CopilotTaskState" },
+          values: {
+            type: "object",
+            additionalProperties: { type: "string" },
+          },
+        },
+      },
+      CopilotClarification: {
+        type: "object",
+        required: ["fields", "reason"],
+        properties: {
+          reason: { type: "string" },
+          task_id: { type: "string" },
+          task: { $ref: "#/components/schemas/CopilotTaskState" },
+          fields: {
+            type: "array",
+            items: {
+              type: "object",
+              required: ["id", "label"],
+              properties: {
+                id: { type: "string" },
+                label: { type: "string" },
+                description: { type: "string" },
+                input_type: { type: "string", enum: ["text", "email", "select", "url"] },
+                required: { type: "boolean" },
+                options: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    required: ["label", "value"],
+                    properties: {
+                      label: { type: "string" },
+                      value: { type: "string" },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      CopilotProposal: {
+        type: "object",
+        required: ["id", "goal", "summary", "actions"],
+        properties: {
+          id: { type: "string" },
+          task_id: { type: "string" },
+          workspace_id: { type: "string", format: "uuid" },
+          goal: { type: "string" },
+          summary: { type: "string" },
+          actions: {
+            type: "array",
+            items: {
+              type: "object",
+              additionalProperties: true,
+            },
+          },
+          missing_inputs: {
+            type: "array",
+            items: { type: "string" },
+          },
+          risks: {
+            type: "array",
+            items: { type: "string" },
+          },
+        },
+      },
+      CopilotExecuteRequest: {
+        type: "object",
+        required: ["approval", "proposal"],
+        properties: {
+          approval: { type: "boolean", enum: [true] },
+          locale: { type: "string", enum: ["en", "ko", "zh-CN"] },
+          proposal: { $ref: "#/components/schemas/CopilotProposal" },
+        },
+      },
+      CopilotAskResponse: {
+        type: "object",
+        required: ["answer", "mode", "sources"],
+        properties: {
+          answer: { type: "string" },
+          kind: { type: "string", enum: ["message", "clarification", "proposal", "execution_result"] },
+          mode: { type: "string", enum: ["ai", "direct"] },
+          model: { type: "string" },
+          clarification: { $ref: "#/components/schemas/CopilotClarification" },
+          proposal: { $ref: "#/components/schemas/CopilotProposal" },
+          results: {
+            type: "array",
+            items: {
+              type: "object",
+              additionalProperties: true,
+            },
+          },
+          sources: {
+            type: "array",
+            items: { $ref: "#/components/schemas/CopilotSource" },
+          },
+        },
+      },
+      CopilotStatusResponse: {
+        type: "object",
+        required: ["available", "checked_at", "model", "api_format"],
+        properties: {
+          available: { type: "boolean" },
+          checked_at: { type: "string", format: "date-time" },
+          message: { type: "string" },
+          model: { type: "string", nullable: true },
+          api_format: { type: "string", enum: ["responses", "chat-completions"], nullable: true },
         },
       },
       Service: {
