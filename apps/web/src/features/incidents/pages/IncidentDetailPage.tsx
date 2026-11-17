@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { FormEvent, ReactNode } from "react";
 import type {
   IncidentPriority,
   IncidentTimelineEntry,
@@ -38,12 +38,14 @@ import { hasWorkspacePermission, useAuth } from "../../../shared/auth";
 import { formatDateTime, formatRelativeTime, shortId } from "../../../shared/utils";
 import {
   useAcknowledgeIncidentMutation,
+  useAddIncidentNoteMutation,
   useIncidentDetail,
   useIncidentNotifications,
   useIncidentServiceOptions,
   useIncidentTimeline,
   useIncidentUserNames,
   useIncidentWorkspaceRoles,
+  useReassignIncidentMutation,
   useResolveIncidentMutation,
   useTriggerManualEscalationMutation,
   useUpdateIncidentPriorityMutation,
@@ -60,6 +62,10 @@ export function IncidentDetailPage() {
   const [manualEscalationReason, setManualEscalationReason] = useState("");
   const [isPriorityEditorOpen, setIsPriorityEditorOpen] = useState(false);
   const [priorityDraft, setPriorityDraft] = useState<IncidentPriority>("P3");
+  const [isResolveConfirmOpen, setIsResolveConfirmOpen] = useState(false);
+  const [resolveNote, setResolveNote] = useState("");
+  const [noteDraft, setNoteDraft] = useState("");
+  const [reassignDraft, setReassignDraft] = useState("");
   const incidentDetailQuery = useIncidentDetail(incidentId);
   const timelineQuery = useIncidentTimeline(incidentId);
   const notificationsQuery = useIncidentNotifications(incidentId);
@@ -70,6 +76,8 @@ export function IncidentDetailPage() {
   const resolveIncidentMutation = useResolveIncidentMutation(incidentId ?? "");
   const updatePriorityMutation = useUpdateIncidentPriorityMutation(incidentId ?? "");
   const triggerManualEscalationMutation = useTriggerManualEscalationMutation(incidentId ?? "");
+  const addNoteMutation = useAddIncidentNoteMutation(incidentId ?? "");
+  const reassignMutation = useReassignIncidentMutation(incidentId ?? "");
 
   const detail = incidentDetailQuery.data;
   const incident = detail?.incident;
@@ -91,18 +99,23 @@ export function IncidentDetailPage() {
   const isActionPending = acknowledgeIncidentMutation.isPending
     || resolveIncidentMutation.isPending
     || updatePriorityMutation.isPending
-    || triggerManualEscalationMutation.isPending;
+    || triggerManualEscalationMutation.isPending
+    || reassignMutation.isPending;
   const actionError = acknowledgeIncidentMutation.error
     ?? resolveIncidentMutation.error
     ?? updatePriorityMutation.error
-    ?? triggerManualEscalationMutation.error;
+    ?? triggerManualEscalationMutation.error
+    ?? reassignMutation.error;
 
   async function handleAcknowledge() {
     await acknowledgeIncidentMutation.mutateAsync();
   }
 
   async function handleResolve() {
-    await resolveIncidentMutation.mutateAsync();
+    const note = resolveNote.trim();
+    await resolveIncidentMutation.mutateAsync(note ? { note } : {});
+    setIsResolveConfirmOpen(false);
+    setResolveNote("");
   }
 
   useEffect(() => {
@@ -111,6 +124,22 @@ export function IncidentDetailPage() {
     setPriorityDraft(incident.priority);
     setIsPriorityEditorOpen(false);
   }, [incident?.id, incident?.priority]);
+
+  async function handleAddNote(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const message = noteDraft.trim();
+    if (!message) return;
+
+    await addNoteMutation.mutateAsync(message);
+    setNoteDraft("");
+  }
+
+  async function handleReassign() {
+    if (!reassignDraft) return;
+
+    await reassignMutation.mutateAsync(reassignDraft);
+    setReassignDraft("");
+  }
 
   async function handleSavePriority() {
     if (!canUseResponseActions || !incident || priorityDraft === incident.priority) return;
@@ -202,8 +231,7 @@ export function IncidentDetailPage() {
                 {canUseResponseActions && isResolveActionVisible ? (
                   <Button
                     disabled={isActionPending}
-                    isLoading={resolveIncidentMutation.isPending}
-                    onClick={() => void handleResolve()}
+                    onClick={() => setIsResolveConfirmOpen((current) => !current)}
                     size="md"
                     variant={isAckActionVisible ? "secondary" : "primary"}
                   >
@@ -217,6 +245,28 @@ export function IncidentDetailPage() {
                 ) : null}
               </div>
             </div>
+
+            {canUseResponseActions && isResolveActionVisible && isResolveConfirmOpen ? (
+              <div className="grid gap-2.5 rounded-xl border border-hairline bg-surface-2 p-4">
+                <Field hint="Saved to the timeline so the next responder knows what fixed it." label="Resolution note (optional)">
+                  <TextArea
+                    disabled={resolveIncidentMutation.isPending}
+                    maxLength={4000}
+                    onChange={(event) => setResolveNote(event.target.value)}
+                    placeholder="Rolled back the 14:05 deploy; error rate back to baseline."
+                    value={resolveNote}
+                  />
+                </Field>
+                <div className="flex flex-wrap justify-end gap-2">
+                  <Button disabled={resolveIncidentMutation.isPending} onClick={() => setIsResolveConfirmOpen(false)} size="sm" variant="ghost">
+                    Cancel
+                  </Button>
+                  <Button disabled={isActionPending} isLoading={resolveIncidentMutation.isPending} onClick={() => void handleResolve()} size="sm" variant="primary">
+                    Resolve incident
+                  </Button>
+                </div>
+              </div>
+            ) : null}
 
             <div className="grid gap-2.5 grid-cols-2 md:grid-cols-4 min-w-0">
               <ResponseSignal label="Service" value={serviceNameById.get(incident.service_id) ?? shortId(incident.service_id)} />
@@ -280,6 +330,31 @@ export function IncidentDetailPage() {
                     </Button>
                   </div>
                 ) : null}
+                {canUseResponseActions && incident.status === "acknowledged" && userNameById ? (
+                  <div className="grid items-end gap-2.5 sm:grid-cols-[minmax(180px,240px)_auto] max-w-115">
+                    <Field label="Hand off to">
+                      <Select
+                        disabled={reassignMutation.isPending}
+                        onChange={(event) => setReassignDraft(event.target.value)}
+                        value={reassignDraft}
+                      >
+                        <option value="">Select responder</option>
+                        {[...userNameById].filter(([id]) => id !== incident.acknowledged_by).map(([id, name]) => (
+                          <option key={id} value={id}>{name}</option>
+                        ))}
+                      </Select>
+                    </Field>
+                    <Button
+                      disabled={!reassignDraft || isActionPending}
+                      isLoading={reassignMutation.isPending}
+                      onClick={() => void handleReassign()}
+                      size="sm"
+                      variant="secondary"
+                    >
+                      Reassign
+                    </Button>
+                  </div>
+                ) : null}
               </div>
 
             </div>
@@ -333,10 +408,29 @@ export function IncidentDetailPage() {
 
             {activeTab === "timeline" ? (
               <div aria-labelledby="incident-tab-timeline" className="grid gap-4 min-w-0" id="incident-panel-timeline" role="tabpanel">
+                {canUseResponseActions ? (
+                  <form className="grid gap-2" onSubmit={(event) => void handleAddNote(event)}>
+                    <Field label="Add a note">
+                      <TextArea
+                        disabled={addNoteMutation.isPending}
+                        maxLength={4000}
+                        onChange={(event) => setNoteDraft(event.target.value)}
+                        placeholder="What you checked, what you changed, what is next."
+                        value={noteDraft}
+                      />
+                    </Field>
+                    {addNoteMutation.error ? <ErrorState error={addNoteMutation.error} title="Could not save note" /> : null}
+                    <div className="flex justify-end">
+                      <Button disabled={!noteDraft.trim()} isLoading={addNoteMutation.isPending} size="sm" type="submit" variant="secondary">
+                        Add note
+                      </Button>
+                    </div>
+                  </form>
+                ) : null}
                 {timelineQuery.isLoading ? (
                   <LoadingState message="Loading timeline..." />
                 ) : (
-                  <Timeline entries={timelineEntries} />
+                  <Timeline entries={timelineEntries} formatUser={formatUser} />
                 )}
               </div>
             ) : null}
@@ -454,6 +548,8 @@ const timelineTypeLabels: Record<string, string> = {
   "incident.acknowledged": "Acknowledged",
   "incident.resolved": "Resolved",
   "incident.priority_updated": "Priority changed",
+  "incident.note": "Note added",
+  "incident.reassigned": "Reassigned",
   "escalation.started": "Escalation started",
   "escalation.restarted": "Escalation restarted",
   "escalation.step_executed": "Escalation step notified",
@@ -463,7 +559,7 @@ const timelineTypeLabels: Record<string, string> = {
   "notification.skipped": "Notification skipped",
 };
 
-function Timeline({ entries }: { entries: IncidentTimelineEntry[] }) {
+function Timeline({ entries, formatUser }: { entries: IncidentTimelineEntry[]; formatUser: (userId: string) => string }) {
   if (entries.length === 0) {
     return <EmptyState message="No timeline entries have been recorded." title="No timeline" />;
   }
@@ -480,7 +576,14 @@ function Timeline({ entries }: { entries: IncidentTimelineEntry[] }) {
                 {formatRelativeTime(entry.created_at)}
               </time>
             </div>
-            <p className="text-ink-muted text-[13px] leading-normal m-0">{entry.message}</p>
+            {entry.type === "incident.note" ? (
+              <div className="grid gap-1 rounded-lg border border-hairline-soft bg-surface-2 px-3 py-2">
+                {entry.actor_user_id ? <span className="text-ink-subtle text-xs font-[650]">{formatUser(entry.actor_user_id)}</span> : null}
+                <p className="text-ink text-[13px] leading-normal m-0 whitespace-pre-wrap break-words">{entry.message}</p>
+              </div>
+            ) : (
+              <p className="text-ink-muted text-[13px] leading-normal m-0">{entry.message}</p>
+            )}
             {entry.metadata ? (
               <details className="bg-surface-2 border border-hairline rounded-xl text-ink-muted text-xs leading-[1.45] overflow-hidden">
                 <summary className="cursor-pointer px-3 py-2 text-ink-muted font-[650]">Metadata</summary>

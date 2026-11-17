@@ -44,6 +44,7 @@ test("responds to an active incident from the overview", async ({ page }) => {
   await page.getByRole("button", { name: "Acknowledge" }).click();
   await expect(page.getByText("acknowledged", { exact: true }).first()).toBeVisible();
   await page.getByRole("button", { name: "Resolve" }).click();
+  await page.getByRole("button", { name: "Resolve incident" }).click();
   await expect(page.getByText("resolved", { exact: true }).first()).toBeVisible();
 
   await page.goto("/overview");

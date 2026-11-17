@@ -60,6 +60,14 @@ export const IncidentFilterSchema = PaginationQuerySchema.extend({
   status: z.union([IncidentStatusSchema, z.literal("open")]).optional(),
 });
 
+export const CreateIncidentNoteRequestSchema = z.object({
+  message: z.string().trim().min(1).max(4000),
+});
+
+export const ReassignIncidentRequestSchema = z.object({
+  user_id: UuidSchema,
+});
+
 export const IncidentTimelineQuerySchema = PaginationQuerySchema.extend({
   cursor: UuidSchema.optional(),
 });
@@ -72,6 +80,7 @@ export const IncidentNotificationsQuerySchema = PaginationQuerySchema.extend({
 
 export const IncidentActionRequestSchema = z.object({
   actor_user_id: UuidSchema.optional(),
+  note: z.string().trim().min(1).max(4000).optional(),
 });
 
 export const UpdateIncidentPriorityRequestSchema = z.object({
@@ -127,6 +136,8 @@ export type IncidentNotificationsQuery = z.infer<typeof IncidentNotificationsQue
 export type IncidentActionRequest = z.infer<typeof IncidentActionRequestSchema>;
 export type UpdateIncidentPriorityRequest = z.infer<typeof UpdateIncidentPriorityRequestSchema>;
 export type IncidentActionLink = z.infer<typeof IncidentActionLinkSchema>;
+export type CreateIncidentNoteRequest = z.infer<typeof CreateIncidentNoteRequestSchema>;
+export type ReassignIncidentRequest = z.infer<typeof ReassignIncidentRequestSchema>;
 export type PaginatedIncidents = z.infer<typeof PaginatedIncidentsSchema>;
 export type PaginatedIncidentTimelineEntries = z.infer<typeof PaginatedIncidentTimelineEntriesSchema>;
 export type PaginatedIncidentNotifications = z.infer<typeof PaginatedIncidentNotificationsSchema>;

@@ -1,7 +1,10 @@
 import type {
+  CreateIncidentNoteRequest,
   CreateIncidentRequest,
   Incident,
   IncidentActionLink,
+  IncidentTimelineEntry,
+  ReassignIncidentRequest,
   IncidentDetail,
   IncidentEscalationState,
   IncidentFilter,
@@ -46,9 +49,22 @@ export function createIncidentApi(client: ApiClient) {
         method: "POST",
       });
     },
-    resolveIncident(incidentId: string) {
+    resolveIncident(incidentId: string, input: { note?: string } = {}) {
       return client.request<Incident>(`/incidents/${incidentId}/resolve`, {
         method: "POST",
+        ...(input.note ? { body: JSON.stringify({ note: input.note }) } : {}),
+      });
+    },
+    addIncidentNote(incidentId: string, input: CreateIncidentNoteRequest) {
+      return client.request<IncidentTimelineEntry>(`/incidents/${incidentId}/notes`, {
+        method: "POST",
+        body: JSON.stringify(input),
+      });
+    },
+    reassignIncident(incidentId: string, input: ReassignIncidentRequest) {
+      return client.request<Incident>(`/incidents/${incidentId}/reassign`, {
+        method: "POST",
+        body: JSON.stringify(input),
       });
     },
     updateIncidentPriority(incidentId: string, input: UpdateIncidentPriorityRequest) {

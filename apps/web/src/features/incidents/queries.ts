@@ -20,6 +20,24 @@ export function useIncidentList(filters: Partial<IncidentFilter>) {
   });
 }
 
+export function useAddIncidentNoteMutation(incidentId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (message: string) => incidentApi.addIncidentNote(incidentId, { message }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.incidents.timeline(incidentId) }),
+  });
+}
+
+export function useReassignIncidentMutation(incidentId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (userId: string) => incidentApi.reassignIncident(incidentId, { user_id: userId }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.incidents.all }),
+  });
+}
+
 export function useIncidentServiceOptions() {
   const { projectId } = useAuth();
   const filters = projectId ? { limit: 100, workspace_id: projectId } : { limit: 100 };
@@ -155,7 +173,7 @@ export function useResolveIncidentMutation(incidentId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: () => incidentApi.resolveIncident(incidentId),
+    mutationFn: (input: { note?: string } = {}) => incidentApi.resolveIncident(incidentId, input),
     onSuccess: async (incident) => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: queryKeys.incidents.all }),

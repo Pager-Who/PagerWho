@@ -31,8 +31,10 @@ test("creates, acknowledges, and resolves a manual incident", async ({ page }) =
   await expect(page.getByText("acknowledged", { exact: true }).first()).toBeVisible();
 
   await page.getByRole("button", { name: "Resolve" }).click();
+  await page.getByLabel("Resolution note (optional)").fill("Rolled back the bad deploy.");
+  await page.getByRole("button", { name: "Resolve incident" }).click();
 
-  await expect(page.getByRole("button", { name: "Resolve" })).toBeHidden();
+  await expect(page.getByRole("button", { exact: true, name: "Resolve" })).toBeHidden();
   await expect(page.getByText("resolved", { exact: true }).first()).toBeVisible();
 
   await page.getByRole("link", { name: "← Incidents" }).click();

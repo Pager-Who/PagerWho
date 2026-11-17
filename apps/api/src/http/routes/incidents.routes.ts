@@ -2,7 +2,9 @@ import { Router } from "express";
 
 import {
   acknowledgeIncidentHandler,
+  addIncidentNoteHandler,
   createIncidentHandler,
+  reassignIncidentHandler,
   getIncidentDetailHandler,
   getIncidentEscalationHandler,
   getIncidentHandler,
@@ -22,6 +24,8 @@ incidentsRoutes.get("/:incidentId/detail", getIncidentDetailHandler);
 incidentsRoutes.get("/:incidentId", getIncidentHandler);
 incidentsRoutes.post("/:incidentId/ack", acknowledgeIncidentHandler);
 incidentsRoutes.post("/:incidentId/resolve", resolveIncidentHandler);
+incidentsRoutes.post("/:incidentId/notes", addIncidentNoteHandler);
+incidentsRoutes.post("/:incidentId/reassign", reassignIncidentHandler);
 incidentsRoutes.patch("/:incidentId/priority", updateIncidentPriorityHandler);
 incidentsRoutes.post("/:incidentId/escalation/manual-trigger", triggerManualEscalationHandler);
 incidentsRoutes.get("/:incidentId/timeline", getIncidentTimelineHandler);

@@ -146,6 +146,88 @@ export class IncidentService {
     return this.listIncidents({ ...filters, service_id: serviceId });
   }
 
+  async addIncidentNote(incidentId: string, actorUserId: string, message: string): Promise<IncidentTimelineEntry> {
+    const entry = await this.db.$transaction(async (tx) => {
+      const [actor, incident] = await Promise.all([
+        tx.user.findUnique({ where: { id: actorUserId } }),
+        tx.incident.findUnique({ where: { id: incidentId } }),
+      ]);
+
+      if (!actor) throw new IncidentError("actor_not_found", "Actor user not found");
+      if (!incident) throw new IncidentError("incident_not_found", "Incident not found");
+
+      const created = await tx.incidentTimelineEntry.create({
+        data: { incidentId, type: "incident.note", message, actorUserId: actor.id },
+      });
+
+      await recordActivityLog(tx, {
+        workspaceId: incident.workspaceId,
+        resourceType: "incident",
+        resourceId: incidentId,
+        action: "incident.note_added",
+        message: `Note added by ${actor.name}`,
+        actorUserId: actor.id,
+        metadata: { incident_id: incident.id, timeline_entry_id: created.id },
+      });
+
+      return created;
+    });
+
+    return this.mapTimelineEntry(entry);
+  }
+
+  // Hands an acknowledged incident to another responder; the caller verifies the assignee can respond.
+  async reassignIncident(incidentId: string, actorUserId: string, assigneeUserId: string): Promise<Incident> {
+    const incident = await this.db.$transaction(async (tx) => {
+      const [actor, assignee, current] = await Promise.all([
+        tx.user.findUnique({ where: { id: actorUserId } }),
+        tx.user.findUnique({ where: { id: assigneeUserId } }),
+        tx.incident.findUnique({ where: { id: incidentId } }),
+      ]);
+
+      if (!actor) throw new IncidentError("actor_not_found", "Actor user not found");
+      if (!current) throw new IncidentError("incident_not_found", "Incident not found");
+      if (!assignee) throw new IncidentError("assignee_not_found", "Assignee user not found");
+      if (current.status !== "acknowledged") {
+        throw new IncidentError("invalid_incident_transition", "Only acknowledged incidents can be reassigned");
+      }
+      if (current.acknowledgedById === assignee.id) return current;
+
+      const updated = await tx.incident.update({
+        where: { id: incidentId },
+        data: { acknowledgedById: assignee.id },
+      });
+      const message = `Incident reassigned to ${assignee.name} by ${actor.name}`;
+
+      await tx.incidentTimelineEntry.create({
+        data: {
+          incidentId,
+          type: "incident.reassigned",
+          message,
+          actorUserId: actor.id,
+          metadata: { from_user_id: current.acknowledgedById, to_user_id: assignee.id },
+        },
+      });
+      await recordActivityLog(tx, {
+        workspaceId: updated.workspaceId,
+        resourceType: "incident",
+        resourceId: incidentId,
+        action: "incident.reassigned",
+        message,
+        actorUserId: actor.id,
+        metadata: {
+          incident_id: updated.id,
+          from_user_id: current.acknowledgedById,
+          to_user_id: assignee.id,
+        },
+      });
+
+      return updated;
+    });
+
+    return this.mapIncident(incident);
+  }
+
   async getIncident(incidentId: string): Promise<Incident | null> {
     const incident = await this.db.incident.findUnique({
       where: {
@@ -495,7 +577,7 @@ export class IncidentService {
     return this.mapIncident(incident);
   }
 
-  async resolveIncident(incidentId: string, actorUserId?: string): Promise<Incident> {
+  async resolveIncident(incidentId: string, actorUserId?: string, options: { note?: string } = {}): Promise<Incident> {
     const incident = await this.db.$transaction(async (tx) => {
       const actor = actorUserId
         ? await tx.user.findUnique({ where: { id: actorUserId } })
@@ -539,6 +621,12 @@ export class IncidentService {
           actorUserId: actor.id,
         },
       });
+
+      if (options.note) {
+        await tx.incidentTimelineEntry.create({
+          data: { incidentId, type: "incident.note", message: options.note, actorUserId: actor.id, metadata: { context: "resolution" } },
+        });
+      }
 
       await tx.incidentEscalationState.updateMany({
         where: {
