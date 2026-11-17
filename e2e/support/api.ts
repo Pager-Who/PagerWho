@@ -33,6 +33,11 @@ export async function fulfillUnhandledApi(route: Route) {
     return;
   }
 
+  if (request.method() === "GET" && url.pathname === "/api/v1/incidents/counts") {
+    await fulfillJson(route, { data: { triggered: 0, acknowledged: 0, resolved: 0, critical_open: 0 } });
+    return;
+  }
+
   if (request.method() === "GET" && /\/api\/v1\/workspaces\/[^/]+\/usage$/.test(url.pathname)) {
     await fulfillJson(route, {
       data: {

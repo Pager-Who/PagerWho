@@ -3,6 +3,7 @@ import { Router } from "express";
 import {
   acknowledgeIncidentHandler,
   addIncidentNoteHandler,
+  countIncidentsHandler,
   createIncidentHandler,
   reassignIncidentHandler,
   getIncidentDetailHandler,
@@ -19,6 +20,7 @@ import {
 export const incidentsRoutes = Router();
 
 incidentsRoutes.get("/", listIncidentsHandler);
+incidentsRoutes.get("/counts", countIncidentsHandler);
 incidentsRoutes.post("/", createIncidentHandler);
 incidentsRoutes.get("/:incidentId/detail", getIncidentDetailHandler);
 incidentsRoutes.get("/:incidentId", getIncidentHandler);

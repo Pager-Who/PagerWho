@@ -1,6 +1,7 @@
 import type {
   CreateIncidentRequest,
   Incident,
+  IncidentCounts,
   IncidentDetail,
   IncidentEscalationState,
   IncidentFilter,
@@ -105,20 +106,14 @@ export class IncidentService {
     const limit = filters.limit ?? 25;
     const incidents = await this.db.incident.findMany({
       where: {
-        ...(filters.workspace_id
-          ? { workspaceId: filters.workspace_id }
-          : filters.workspaceIds
-            ? { workspaceId: { in: filters.workspaceIds } }
-            : {}),
-        ...(filters.service_id ? { serviceId: filters.service_id } : {}),
-        ...(filters.severity ? { severity: filters.severity } : {}),
-        ...(filters.priority ? { priority: filters.priority } : {}),
+        ...this.buildIncidentScopeWhere(filters),
         ...(filters.status === "open"
           ? { status: { in: ["triggered", "acknowledged"] as const } }
           : filters.status ? { status: filters.status } : {}),
       },
-      orderBy: filters.status === "open"
-        ? [{ priority: "asc" }, { createdAt: "desc" }, { id: "desc" }]
+      // Unresolved queues sort by response urgency across pages; history views stay newest first.
+      orderBy: filters.status && filters.status !== "resolved"
+        ? [{ priority: "asc" }, { status: "asc" }, { createdAt: "desc" }, { id: "desc" }]
         : [{ createdAt: "desc" }, { id: "desc" }],
       ...(filters.cursor
         ? {
@@ -144,6 +139,29 @@ export class IncidentService {
     filters: Omit<IncidentListFilters, "service_id"> = {},
   ): Promise<PaginatedResponse<Incident>> {
     return this.listIncidents({ ...filters, service_id: serviceId });
+  }
+
+  // Queue totals for the same filters as the list (ignoring status and paging), so summary cards are not page-bound.
+  async countIncidents(filters: IncidentListFilters = {}): Promise<IncidentCounts> {
+    const where = this.buildIncidentScopeWhere(filters);
+    const [byStatus, criticalOpen] = await Promise.all([
+      this.db.incident.groupBy({ by: ["status"], where, _count: { _all: true } }),
+      this.db.incident.count({
+        where: {
+          ...where,
+          status: { in: ["triggered", "acknowledged"] },
+          OR: [{ priority: "P1" }, { severity: "critical" }],
+        },
+      }),
+    ]);
+    const countFor = (status: string) => byStatus.find((row) => row.status === status)?._count._all ?? 0;
+
+    return {
+      triggered: countFor("triggered"),
+      acknowledged: countFor("acknowledged"),
+      resolved: countFor("resolved"),
+      critical_open: criticalOpen,
+    };
   }
 
   async addIncidentNote(incidentId: string, actorUserId: string, message: string): Promise<IncidentTimelineEntry> {
@@ -226,6 +244,22 @@ export class IncidentService {
     });
 
     return this.mapIncident(incident);
+  }
+
+  private buildIncidentScopeWhere(filters: IncidentListFilters) {
+    return {
+      ...(filters.workspace_id
+        ? { workspaceId: filters.workspace_id }
+        : filters.workspaceIds
+          ? { workspaceId: { in: filters.workspaceIds } }
+          : {}),
+      ...(filters.service_id ? { serviceId: filters.service_id } : {}),
+      ...(filters.severity ? { severity: filters.severity } : {}),
+      ...(filters.priority ? { priority: filters.priority } : {}),
+      ...(filters.acknowledged_by ? { acknowledgedById: filters.acknowledged_by } : {}),
+      // ponytail: unindexed ILIKE scan within the workspace; add a trigram index if title search gets slow.
+      ...(filters.q ? { title: { contains: filters.q, mode: "insensitive" as const } } : {}),
+    };
   }
 
   async getIncident(incidentId: string): Promise<Incident | null> {

@@ -2,6 +2,7 @@ import {
   CreateIncidentNoteRequestSchema,
   CreateIncidentRequestSchema,
   IncidentActionRequestSchema,
+  IncidentCountsQuerySchema,
   IncidentFilterSchema,
   IncidentNotificationsQuerySchema,
   IncidentTimelineQuerySchema,
@@ -51,6 +52,31 @@ export const listIncidentsHandler: RequestHandler = async (req, res, next) => {
       ...(workspaceIds ? { workspaceIds } : {}),
     });
     res.json({ data: incidentsPage });
+  } catch (error) {
+    next(mapIncidentError(error));
+  }
+};
+
+export const countIncidentsHandler: RequestHandler = async (req, res, next) => {
+  try {
+    const parsedQuery = IncidentCountsQuerySchema.safeParse(req.query);
+
+    if (!parsedQuery.success) {
+      throw new HttpError(400, "invalid_incident_filter", "Invalid incident filter", parsedQuery.error.flatten());
+    }
+
+    const workspaceIds = parsedQuery.data.workspace_id
+      ? undefined
+      : await getActorWorkspaceIds(req);
+
+    if (parsedQuery.data.workspace_id) {
+      await assertActorWorkspaceMember(req, parsedQuery.data.workspace_id);
+    }
+
+    res.json({ data: await incidentService.countIncidents({
+      ...parsedQuery.data,
+      ...(workspaceIds ? { workspaceIds } : {}),
+    }) });
   } catch (error) {
     next(mapIncidentError(error));
   }

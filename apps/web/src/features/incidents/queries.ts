@@ -1,4 +1,10 @@
-import type { CreateIncidentRequest, IncidentFilter, IncidentPriority, ManualEscalationRequest } from "@im/contracts";
+import type {
+  CreateIncidentRequest,
+  IncidentCountsQuery,
+  IncidentFilter,
+  IncidentPriority,
+  ManualEscalationRequest,
+} from "@im/contracts";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { incidentApi, serviceApi, userApi, workspaceApi } from "../../shared/api/client";
@@ -15,6 +21,18 @@ export function useIncidentList(filters: Partial<IncidentFilter>) {
   return useQuery({
     queryKey: queryKeys.incidents.list(scopedFilters),
     queryFn: () => incidentApi.listIncidents(scopedFilters),
+    enabled: Boolean(projectId),
+    refetchInterval: incidentRefreshIntervalMs,
+  });
+}
+
+export function useIncidentCounts(filters: IncidentCountsQuery) {
+  const { projectId } = useAuth();
+  const scopedFilters = projectId ? { ...filters, workspace_id: projectId } : filters;
+
+  return useQuery({
+    queryKey: queryKeys.incidents.counts(scopedFilters),
+    queryFn: () => incidentApi.countIncidents(scopedFilters),
     enabled: Boolean(projectId),
     refetchInterval: incidentRefreshIntervalMs,
   });

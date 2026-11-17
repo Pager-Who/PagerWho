@@ -58,6 +58,17 @@ export const IncidentFilterSchema = PaginationQuerySchema.extend({
   severity: IncidentSeveritySchema.optional(),
   priority: IncidentPrioritySchema.optional(),
   status: z.union([IncidentStatusSchema, z.literal("open")]).optional(),
+  acknowledged_by: UuidSchema.optional(),
+  q: z.string().trim().min(1).max(200).optional(),
+});
+
+export const IncidentCountsQuerySchema = IncidentFilterSchema.omit({ cursor: true, limit: true, status: true });
+
+export const IncidentCountsSchema = z.object({
+  triggered: z.number().int(),
+  acknowledged: z.number().int(),
+  resolved: z.number().int(),
+  critical_open: z.number().int(),
 });
 
 export const CreateIncidentNoteRequestSchema = z.object({
@@ -136,6 +147,8 @@ export type IncidentNotificationsQuery = z.infer<typeof IncidentNotificationsQue
 export type IncidentActionRequest = z.infer<typeof IncidentActionRequestSchema>;
 export type UpdateIncidentPriorityRequest = z.infer<typeof UpdateIncidentPriorityRequestSchema>;
 export type IncidentActionLink = z.infer<typeof IncidentActionLinkSchema>;
+export type IncidentCountsQuery = z.infer<typeof IncidentCountsQuerySchema>;
+export type IncidentCounts = z.infer<typeof IncidentCountsSchema>;
 export type CreateIncidentNoteRequest = z.infer<typeof CreateIncidentNoteRequestSchema>;
 export type ReassignIncidentRequest = z.infer<typeof ReassignIncidentRequestSchema>;
 export type PaginatedIncidents = z.infer<typeof PaginatedIncidentsSchema>;

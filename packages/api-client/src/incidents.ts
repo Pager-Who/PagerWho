@@ -3,6 +3,8 @@ import type {
   CreateIncidentRequest,
   Incident,
   IncidentActionLink,
+  IncidentCounts,
+  IncidentCountsQuery,
   IncidentTimelineEntry,
   ReassignIncidentRequest,
   IncidentDetail,
@@ -54,6 +56,9 @@ export function createIncidentApi(client: ApiClient) {
         method: "POST",
         ...(input.note ? { body: JSON.stringify({ note: input.note }) } : {}),
       });
+    },
+    countIncidents(filters: IncidentCountsQuery = {}) {
+      return client.request<IncidentCounts>(`/incidents/counts${buildQueryString(filters)}`);
     },
     addIncidentNote(incidentId: string, input: CreateIncidentNoteRequest) {
       return client.request<IncidentTimelineEntry>(`/incidents/${incidentId}/notes`, {
