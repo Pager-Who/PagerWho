@@ -73,6 +73,7 @@ type IncidentForEscalation = {
   serviceId: string;
   title: string;
   severity: string;
+  priority: string;
   status: string;
 };
 
@@ -95,6 +96,7 @@ type UserNotificationRoute = {
     channel: string;
     enabled: boolean;
     delaySeconds: number;
+    maxPriority: string | null;
   }[];
 };
 
@@ -818,7 +820,7 @@ export class EscalationService {
     repeatIteration: number,
     options: NotificationLogCreationOptions = {},
   ): Promise<number> {
-    const targets = await this.resolveNotificationTargets(tx, incident.serviceId, step);
+    const targets = await this.resolveNotificationTargets(tx, incident.serviceId, step, incident.priority);
     let created = 0;
 
     for (const target of targets) {
@@ -873,6 +875,7 @@ export class EscalationService {
     tx: TransactionClient,
     serviceId: string,
     step: SnapshotStep,
+    incidentPriority: string,
   ): Promise<NotificationTarget[]> {
     if (step.target_type === "primary_on_call" || step.target_type === "secondary_on_call") {
       const layer = step.target_type === "primary_on_call" ? "primary" : "secondary";
@@ -884,7 +887,7 @@ export class EscalationService {
         return [];
       }
 
-      return this.resolveUserNotificationTargets(user);
+      return this.resolveUserNotificationTargets(user, incidentPriority);
     }
 
     if (step.target_type === "user" && step.target_id) {
@@ -895,7 +898,7 @@ export class EscalationService {
         include: this.userNotificationRouteInclude(),
       });
 
-      return user ? this.resolveUserNotificationTargets(user) : [];
+      return user ? this.resolveUserNotificationTargets(user, incidentPriority) : [];
     }
 
     if (step.target_type === "team" && step.target_id) {
@@ -911,7 +914,7 @@ export class EscalationService {
       });
 
       return members.flatMap((member: TeamMemberNotificationRoute) =>
-        this.resolveUserNotificationTargets(member.user),
+        this.resolveUserNotificationTargets(member.user, incidentPriority),
       );
     }
 
@@ -940,13 +943,13 @@ export class EscalationService {
     return [];
   }
 
-  private resolveUserNotificationTargets(user: UserNotificationRoute): NotificationTarget[] {
+  private resolveUserNotificationTargets(user: UserNotificationRoute, incidentPriority: string): NotificationTarget[] {
     const contacts = new Map(user.notificationContacts.map((contact) => [contact.type, contact]));
     const preferences = this.userPreferencesWithDefaults(user.notificationPreferences);
     const targets: NotificationTarget[] = [];
 
     for (const preference of preferences) {
-      if (!preference.enabled) {
+      if (!preference.enabled || !isPriorityWithinThreshold(incidentPriority, preference.maxPriority)) {
         continue;
       }
 
@@ -1261,6 +1264,7 @@ export class EscalationService {
         channel: defaultPreference.channel,
         enabled: preference?.enabled ?? defaultPreference.enabled,
         delaySeconds: preference?.delaySeconds ?? defaultPreference.delaySeconds,
+        maxPriority: preference?.maxPriority ?? null,
       };
     });
   }
@@ -1302,6 +1306,14 @@ export class EscalationService {
       updated_at: state.updatedAt.toISOString(),
     };
   }
+}
+
+// "P2" threshold pages for P1 and P2 only. A null threshold, or an unparseable value, pages for everything.
+export function isPriorityWithinThreshold(incidentPriority: string, maxPriority: string | null): boolean {
+  const incidentRank = Number(/^P([1-5])$/.exec(incidentPriority)?.[1]);
+  const thresholdRank = Number(/^P([1-5])$/.exec(maxPriority ?? "")?.[1]);
+
+  return !thresholdRank || !incidentRank || incidentRank <= thresholdRank;
 }
 
 function isSlackIncomingWebhookUrl(value: string | null | undefined): value is string {

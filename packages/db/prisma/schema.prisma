@@ -407,6 +407,8 @@ model UserNotificationPreference {
   channel      NotificationChannel
   enabled      Boolean             @default(false)
   delaySeconds Int                 @default(0) @map("delay_seconds")
+  // Lowest-urgency priority this channel pages for (P2 = P1 and P2 only); null = every priority.
+  maxPriority  IncidentPriority?   @map("max_priority")
   user         User                @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt    DateTime            @default(now()) @map("created_at")
   updatedAt    DateTime            @updatedAt @map("updated_at")
